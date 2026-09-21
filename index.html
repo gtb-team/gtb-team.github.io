@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>GTB 참석신청</title>
+<meta property="og:title" content="GTB 참석신청">
+<meta property="og:description" content="참석 신청 · 월회비 신청">
+<meta property="og:type" content="website">
+<style>
+  html, body { height: 100%; margin: 0; background: #ffffff; }
+  #app { position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: 0; display: block; }
+  #wait { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; padding: 24px;
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; color: #5a6675; text-align: center; }
+  #wait.over { z-index: 2; background: #ffffff; }
+  #wait[hidden] { display: none; }
+  @media (prefers-color-scheme: dark) {
+    html, body, #wait.over { background: #12161c; }
+    #wait { color: #9aa6b5; }
+  }
+</style>
+</head>
+<body>
+<div id="wait">불러오는 중…</div>
+<iframe id="app" title="GTB 참석신청" allow="clipboard-write"></iframe>
+<noscript>이 페이지는 자바스크립트가 켜져 있어야 열립니다.</noscript>
+<script>
+/*
+ * GTB 참석신청 껍데기 페이지
+ *
+ * 하는 일
+ *  1) 참석신청 웹앱(Google Apps Script)을 화면 가득 끼워 넣는다. 이렇게 열면 위쪽의 구글 안내 문구가 나오지 않는다.
+ *  2) 로그인 정보를 "이 주소"의 저장소에 보관한다. 구글 화면 안의 저장소보다 훨씬 오래 유지된다.
+ *  3) 카카오톡 안에서 열었는데 로그인 정보가 없으면, 버튼을 누르지 않아도 카카오 자동 로그인(prompt=none)을 한 번 시도한다.
+ *
+ * 이 파일에는 비밀 값이 없다. 카카오 키는 Apps Script 안에만 있다.
+ */
+(function () {
+  'use strict';
+
+  // ▼ 참석신청 웹앱 주소 (Apps Script 배포 주소, /exec 로 끝남). 배포를 새로 만들어 주소가 바뀌면 여기만 고치면 된다.
+  var EXEC = 'https://script.google.com/macros/s/AKfycbzkbCqzRywLo0maxraiYh9h9Iv3g5UCAe6EmQGjyapAgN7bxE_dl51A8mNgr9I-FsCB/exec';
+
+  var KEY = 'gtb.token';            // 로그인 정보
+  var TRIED = 'gtb.autoTried';      // 이번 접속에서 자동 로그인을 이미 시도했는지(무한 반복 방지)
+
+  var frame = document.getElementById('app');
+  var wait = document.getElementById('wait');
+
+  // 다른 사이트가 이 페이지를 끼워 넣은 경우에는 동작하지 않는다(로그인 정보를 가로채려는 시도를 막는다).
+  if (window.top !== window.self) {
+    wait.textContent = '이 페이지는 다른 사이트 안에서는 열 수 없어요.';
+    try { window.top.location = window.location.href; } catch (e) { /* 무시 */ }
+    return;
+  }
+
+  function read(store, k) { try { return store.getItem(k) || ''; } catch (e) { return ''; } }
+  function write(store, k, v) { try { if (v) store.setItem(k, v); else store.removeItem(k); } catch (e) { /* 저장이 막힌 환경 */ } }
+  function param(name) {
+    var m = new RegExp('[?&]' + name + '=([^&#]*)').exec(window.location.search);
+    return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '';
+  }
+  function showWait(text, over) { wait.textContent = text; wait.className = over ? 'over' : ''; wait.removeAttribute('hidden'); }
+  function hideWait() { wait.setAttribute('hidden', 'hidden'); }
+
+  var code = param('code'), state = param('state'), kakaoError = param('error');
+  var cameBack = !!(code || kakaoError);                       // 카카오 로그인에서 방금 돌아온 접속
+  var inKakaoTalk = /KAKAOTALK/i.test(navigator.userAgent);
+  var token = read(window.localStorage, KEY);
+
+  // 주소창에 남은 인가 코드는 바로 지운다(새로고침·공유 때 다시 쓰이지 않게).
+  if (cameBack && window.history && window.history.replaceState) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+
+  var src = EXEC + '?via=w';
+  if (code && state) src += '&code=' + encodeURIComponent(code) + '&state=' + encodeURIComponent(state);
+  else if (kakaoError) src += '&auto=fail';                    // 자동 로그인이 안 된 경우(처음 오는 사람 등): 로그인 버튼 화면을 보여 준다
+  else if (token) src += '&t=' + encodeURIComponent(token);
+  frame.src = src;
+
+  window.addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.gtb !== 1) return;
+    // 보낸 곳 확인: 구글이 웹앱을 돌리는 주소이고, 이 페이지 안에 끼워진 화면이어야 한다.
+    if (!/^https:\/\/[a-z0-9-]+\.googleusercontent\.com$/.test(ev.origin)) return;
+    try { if (!ev.source || ev.source.top !== window) return; } catch (e) { return; }
+
+    if (d.type === 'token') {
+      write(window.localStorage, KEY, typeof d.token === 'string' ? d.token : '');
+      return;
+    }
+    if (d.type === 'ready') { hideWait(); return; }
+    if (d.type === 'logout') {                                 // 직접 로그아웃: 이번 접속에서는 자동 로그인을 다시 걸지 않는다
+      write(window.localStorage, KEY, '');
+      write(window.sessionStorage, TRIED, '1');
+      hideWait();
+      return;
+    }
+    if (d.type === 'login') {                                  // 로그인이 필요한 상태
+      write(window.localStorage, KEY, '');
+      var url = typeof d.loginUrl === 'string' ? d.loginUrl : '';
+      var canAuto = inKakaoTalk && !cameBack && !read(window.sessionStorage, TRIED)
+        && /^https:\/\/kauth\.kakao\.com\/oauth\/authorize\?/.test(url);
+      if (!canAuto) { hideWait(); return; }
+      // 카카오톡 안에서는 이미 가입한 회원이면 버튼 없이 바로 로그인된다. 안 되면 error 와 함께 돌아오고, 그때는 버튼 화면을 보여 준다.
+      write(window.sessionStorage, TRIED, '1');
+      showWait('로그인 확인 중…', true);
+      window.location.href = url + '&prompt=none';
+    }
+  });
+
+  // 안쪽 화면이 신호를 보내지 못하는 경우에도 안내 문구가 계속 남지 않게 한다.
+  frame.addEventListener('load', function () { window.setTimeout(hideWait, 1500); });
+})();
+</script>
+</body>
+</html>

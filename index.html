@@ -1,119 +1,1267 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+<base target="_top">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GTB 참석신청</title>
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
-<title>GTB 참석신청</title>
 <meta property="og:title" content="GTB 참석신청">
 <meta property="og:description" content="참석 신청 · 월회비 신청">
 <meta property="og:type" content="website">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&text=0123456789%3A-%2C&display=swap">
 <style>
-  html, body { height: 100%; margin: 0; background: #ffffff; }
-  #app { position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: 0; display: block; }
-  #wait { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; padding: 24px;
-    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; color: #5a6675; text-align: center; }
-  #wait.over { z-index: 2; background: #ffffff; }
-  #wait[hidden] { display: none; }
-  @media (prefers-color-scheme: dark) {
-    html, body, #wait.over { background: #12161c; }
-    #wait { color: #9aa6b5; }
+  :root {
+    --desk: #E7EBF0; --paper: #FFFFFF; --ink: #17202B; --ink-2: #566273; --line: #D3DAE3;
+    --sun: #CF2F3B; --sat: #2456D3; --go: #0B7F57; --go-bg: #E3F3EB; --note-bg: #F3F5F8;
+    --num: 'Barlow Condensed', 'Roboto Condensed', 'Arial Narrow', sans-serif-condensed, sans-serif;
+    --body: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', Pretendard, 'Noto Sans KR', 'Noto Sans CJK KR', 'Malgun Gothic', sans-serif;
   }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --desk: #0E1216; --paper: #171D25; --ink: #E9EDF2; --ink-2: #9BA7B6; --line: #2A333F;
+      --sun: #FF6F78; --sat: #7AA2FF; --go: #56D3A4; --go-bg: #143329; --note-bg: #1F2731;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--desk); color: var(--ink); font: 16px/1.5 var(--body); word-break: keep-all; overflow-wrap: anywhere; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--sat); outline-offset: 2px; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .sheet { max-width: 520px; min-height: 100vh; margin: 0 auto; background: var(--paper); padding-bottom: 128px; }   /* 아래 여백: 떠 있는 버튼이 바닥글을 가리지 않게 */
+
+  /* 머리말 */
+  /* 머리말(과 운영진 탭)은 스크롤해도 화면 위에 붙어 있다. 목록을 위·아래로 끝없이 불러오기 때문에 맨 위로 돌아가지 않아도 닿아야 한다. */
+  .stick { position: -webkit-sticky; position: sticky; top: 0; z-index: 10; background: var(--paper); border-bottom: 1px solid var(--line); }
+  .top { display: flex; align-items: center; gap: 10px; padding: 8px 16px; min-height: 56px; }
+  .top__text { flex: 1; min-width: 0; }
+  .top h1 { margin: 0; font-size: 17px; line-height: 1.25; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top p { margin: 1px 0 0; font-size: 12.5px; line-height: 1.3; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top p b { color: var(--ink); font-weight: 700; }
+  .jump { position: fixed; right: max(16px, calc(50% - 244px)); bottom: 72px; z-index: 15; min-height: 40px; padding: 8px 14px; border: 0; border-radius: 20px;
+    background: var(--ink); color: var(--paper); font-size: 13px; font-weight: 700; box-shadow: 0 2px 10px rgba(0, 0, 0, .25); }
+  .jump[hidden] { display: none; }
+  .linkbtn { background: none; border: 0; padding: 8px 4px; font-size: 14px; color: var(--sat); text-decoration: underline; text-underline-offset: 3px; }
+
+  .tabs { display: flex; border-top: 1px solid var(--line); padding: 0 8px; }
+  .tabs button { flex: none; background: none; border: 0; padding: 9px 10px 7px; min-height: 40px; font-size: 14.5px; font-weight: 700; color: var(--ink-2); border-bottom: 3px solid transparent; margin-bottom: -1px; }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  .tabs .badge { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 10px; background: var(--sun); color: #fff; font: 700 14px/20px var(--num); text-align: center; }
+
+  /* 하루 = 일력 한 장 */
+  .day { display: flex; gap: 14px; padding: 20px 16px; border-top: 1px dashed var(--line); }
+  .day:first-of-type { border-top: 0; }
+  .leaf { position: sticky; top: 10px; align-self: flex-start; flex: none; width: 62px; text-align: center; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); }
+  .leaf__month { background: var(--ink); color: var(--paper); font-size: 12px; font-weight: 700; line-height: 20px; border-radius: 3px 3px 0 0; }
+  .leaf__num { font: 700 46px/1 var(--num); padding: 7px 0 1px; }
+  .leaf__dow { font-size: 12px; font-weight: 700; padding-bottom: 7px; }
+  .leaf--sun .leaf__num, .leaf--sun .leaf__dow { color: var(--sun); }
+  .leaf--sat .leaf__num, .leaf--sat .leaf__dow { color: var(--sat); }
+  .leaf--sun .leaf__month { background: var(--sun); color: #fff; }
+  .leaf__rel { border-top: 1px solid var(--line); font-size: 12px; font-weight: 800; line-height: 22px; }
+  .leaf--stamped { margin-bottom: 22px; }
+  .leaf--stamped .leaf__rel { text-align: left; padding-left: 8px; }   /* 도장이 글자를 가리지 않게 */
+  .stamp { position: absolute; right: -14px; bottom: -20px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--sun); box-shadow: inset 0 0 0 2px var(--paper), inset 0 0 0 3px var(--sun); background: var(--paper); color: var(--sun); font-size: 11px; font-weight: 800; line-height: 1.15; transform: rotate(-14deg); }
+
+  .day__events { flex: 1; min-width: 0; }
+  .ev + .ev { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .ev h2 { margin: 0; font-size: 18px; line-height: 1.35; font-weight: 800; }
+  .ev__time { font: 700 21px/1 var(--num); margin-right: 7px; letter-spacing: 0.01em; }
+  .ev__sub { margin: 3px 0 0; font-size: 14px; color: var(--ink-2); }
+  .ev__count { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 10px 0 0; font-size: 14px; color: var(--ink-2); }
+  .ev__count b { font: 700 19px/1 var(--num); color: var(--ink); margin: 0 1px; }
+  .grp { margin-top: 12px; }
+  .grp h3 { margin: 0 0 6px; font-size: 13px; font-weight: 800; }
+  .grp--wait h3, .grp--practice h3 { color: var(--ink-2); }
+  .names { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .names li > * { display: block; padding: 3px 9px; border: 1px solid var(--line); border-radius: 14px; font-size: 13px; line-height: 20px; background: none; max-width: 100%; text-align: left; }
+  .names .no { font: 700 14px/1 var(--num); color: var(--ink-2); margin-right: 5px; }
+  .names .by { font-size: 11px; color: var(--ink-2); margin-left: 5px; }
+  .tagx { display: inline-block; margin-left: 5px; padding: 0 5px; border: 1px solid currentColor; border-radius: 8px; font-size: 11px; font-weight: 700; line-height: 15px; vertical-align: 1px; }
+  .tagx--late { color: var(--sat); }
+  .tagx--no { color: var(--sun); }
+  .tagx--came { color: var(--go); }
+  .tagx--staff { color: var(--ink-2); }
+  .pick { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 2px; border-top: 1px solid var(--line); font-size: 15px; }
+  .pick input { flex: none; width: 22px; height: 22px; }
+  .pick small { color: var(--ink-2); }
+  .tel { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 6px 2px; border-top: 1px solid var(--line); font-size: 15px; }
+  .tel a { flex: none; color: var(--sat); font: 700 19px/1 var(--num); letter-spacing: 0.02em; text-decoration: none; }
+  .tel small { color: var(--ink-2); }
+  .linkbtn svg { vertical-align: -2px; margin-right: 3px; }
+  .pickhead { margin: 14px 0 6px; font-size: 13px; font-weight: 800; }
+  .pickhead small { font-weight: 400; color: var(--ink-2); }
+  .names .is-me > * { border-color: var(--go); background: var(--go-bg); color: var(--go); font-weight: 700; }
+  .names .is-me .no { color: inherit; }
+  .grp--wait .names li > * { border-style: dashed; }
+  .grp--practice .names li > * { border-color: transparent; background: var(--note-bg); }
+
+  .act { margin-top: 12px; }
+  .btn { display: block; width: 100%; min-height: 48px; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); font-size: 16px; font-weight: 700; }
+  .btn--ghost { background: none; color: var(--ink); border-color: var(--line); }
+  .btn--danger { background: var(--sun); border-color: var(--sun); color: #fff; }
+  .btn[disabled] { background: var(--note-bg); border-color: var(--line); color: var(--ink-2); cursor: default; }
+  .done { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 800; color: var(--go); }
+  .done svg { flex: none; }
+  .done--wait { color: var(--sat); }
+  .done--new { animation: press .22s ease-out; }
+  @keyframes press { from { transform: scale(1.12); opacity: .2; } to { transform: none; opacity: 1; } }
+  .note { margin: 8px 0 0; padding: 8px 10px; border-radius: 6px; background: var(--note-bg); font-size: 13px; color: var(--ink-2); }
+  .note--warn { color: var(--sun); }
+  .act .note + .btn { margin-top: 8px; }
+  .pair { display: flex; gap: 8px; margin-top: 8px; }
+  .pair .btn { min-height: 42px; padding: 8px 10px; font-size: 15px; }
+  .guest { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 7px 4px 7px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
+  .guest__who { flex: 1; min-width: 0; }
+  .guest__who small { display: block; font-size: 12px; color: var(--ink-2); }
+  .tools { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 6px; }
+  .top__acts { flex: none; display: flex; align-items: center; gap: 12px; }
+  .iconbtn { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: none; color: var(--ink); }
+  .feelink { min-height: 40px; padding: 8px 14px; border: 1px solid var(--ink); border-radius: 20px; background: none; font-size: 14px; font-weight: 700; }
+  .cmts { margin-top: 12px; padding-top: 10px; border-top: 1px dotted var(--line); }
+  .cmt { display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; font-size: 14px; }
+  .cmt b { flex: none; font-weight: 700; }
+  .cmt span { flex: 1; min-width: 0; }
+  .cmt small { flex: none; font-size: 11px; color: var(--ink-2); }
+  .cmt .linkbtn { flex: none; padding: 0 2px; font-size: 12px; }
+  .cmt__edited { font-size: 11px; color: var(--ink-2); }
+  .cmtform { display: flex; gap: 6px; margin-top: 6px; }
+  .cmtform input { flex: 1; min-width: 0; min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 15px; }
+  .cmtform .btn { width: auto; min-height: 40px; padding: 6px 14px; font-size: 14px; }
+  .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 6px 0 4px; }
+  .days button { min-height: 52px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: none; font-size: 17px; font-weight: 800; }
+  .days button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+  .days .is-sat { color: var(--sat); } .days .is-sun { color: var(--sun); }
+  .days button[aria-pressed="true"].is-sat, .days button[aria-pressed="true"].is-sun { color: var(--paper); }
+  .price { margin: 12px 0; padding: 14px; border: 1px solid var(--line); border-radius: 8px; }
+  .price__row { display: flex; justify-content: space-between; gap: 10px; font-size: 15px; margin-bottom: 4px; }
+  .price__total { display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-weight: 800; }
+  .price__total b { font: 700 30px/1 var(--num); }
+  .plan { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-size: 14px; }
+  .plan th, .plan td { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: left; font-weight: 400; }
+  .plan td:last-child { text-align: right; font-weight: 700; }
+  .seg { display: flex; gap: 6px; margin-bottom: 14px; }
+  .seg button { flex: 1; min-height: 42px; border: 1px solid var(--line); border-radius: 8px; background: none; font-size: 15px; font-weight: 700; color: var(--ink-2); }
+  .seg button[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+
+  .more { display: block; width: calc(100% - 32px); margin: 10px 16px; min-height: 44px; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; background: none; font-size: 14px; font-weight: 700; color: var(--ink-2); }
+  .edge { padding: 14px 16px; text-align: center; font-size: 13px; color: var(--ink-2); }
+  .day--past { opacity: .72; }
+  .day--past .leaf { background: var(--note-bg); }
+  .empty { padding: 56px 24px; text-align: center; color: var(--ink-2); }
+  .empty strong { display: block; margin-bottom: 6px; font-size: 17px; color: var(--ink); }
+  .foot { margin: 8px 16px 0; padding-top: 16px; border-top: 1px dashed var(--line); font-size: 13px; color: var(--ink-2); }
+  .foot p { margin: 0 0 4px; }
+
+  /* 운영진 메뉴 */
+  .panel { padding: 22px 16px 6px; }
+  .panel + .panel { border-top: 1px dashed var(--line); }
+  .panel h2 { margin: 0 0 4px; font-size: 18px; font-weight: 800; }
+  .panel > p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
+  .req { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .req__who { flex: 1; min-width: 0; }
+  .req__who b { display: block; font-size: 16px; }
+  .req__who span { font-size: 13px; color: var(--ink-2); }
+  .req__code { font: 700 26px/1 var(--num); letter-spacing: 0.06em; }
+  .req .btn { width: auto; min-height: 40px; padding: 6px 14px; font-size: 14px; }
+  .rec { padding: 14px 0 4px; border-top: 1px solid var(--line); }
+  .rec h3 { margin: 0; font-size: 15px; font-weight: 800; }
+  .rec h3 small { margin-left: 6px; font-size: 13px; font-weight: 400; color: var(--ink-2); }
+  .rec .grp { margin-top: 8px; }
+  .check { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 15px; }
+  .check input { width: 20px; height: 20px; }
+  .result { margin: 0 0 12px; padding: 0 0 0 18px; font-size: 13px; color: var(--ink-2); }
+  .field { display: block; margin-bottom: 12px; }
+  .field > span { display: block; margin-bottom: 4px; font-size: 14px; font-weight: 700; }
+  .field small { font-weight: 400; color: var(--ink-2); }
+  .field input, .field select, .field textarea { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 16px; }
+  .row2 { display: flex; gap: 10px; }
+  .row2 > * { flex: 1; min-width: 0; }
+
+  /* 단독 화면(로그인·등록·대기 등) */
+  .solo { padding: 56px 24px 32px; }
+  .solo h1 { margin: 0 0 10px; font-size: 24px; line-height: 1.3; font-weight: 800; letter-spacing: -0.01em; }
+  .solo p { margin: 0 0 14px; color: var(--ink-2); }
+  .solo ol { margin: 0 0 20px; padding-left: 20px; color: var(--ink-2); }
+  .solo ol li { margin-bottom: 4px; }
+  .solo .err { padding: 10px 12px; border-radius: 6px; background: var(--note-bg); color: var(--sun); font-size: 14px; }
+  .kakao { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px; margin: 22px 0 14px; border-radius: 8px; background: #FEE500; color: rgba(0, 0, 0, .85); font-size: 16px; font-weight: 700; text-decoration: none; }
+  .code { margin: 4px 0 18px; padding: 18px 0 14px; text-align: center; border: 1px solid var(--line); border-radius: 4px; }
+  .code b { display: block; font: 700 64px/1 var(--num); letter-spacing: 0.12em; text-indent: 0.12em; }
+  .code span { font-size: 13px; color: var(--ink-2); }
+  .solo .btn + .btn { margin-top: 8px; }
+  .fine { font-size: 13px; }
+
+  /* 확인 창 / 알림 */
+  .veil { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-end; justify-content: center; background: rgba(10, 14, 20, .5); }
+  .modal { width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; padding: 22px 16px 18px; border-radius: 14px 14px 0 0; background: var(--paper); }
+  .modal h3 { margin: 0 0 6px; font-size: 18px; font-weight: 800; }
+  .modal p { margin: 0 0 16px; font-size: 15px; color: var(--ink-2); white-space: pre-line; }
+  .modal textarea { width: 100%; min-height: 160px; margin-bottom: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 14px; }
+  .modal .btn + .btn { margin-top: 8px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; z-index: 30; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 11px 16px; border-radius: 8px; background: var(--ink); color: var(--paper); font-size: 14px; font-weight: 700; text-align: center; }
+  .bar { position: fixed; top: 0; left: 0; right: 0; z-index: 40; height: 3px; background: var(--sat); transform-origin: left; animation: load 1.6s ease-in-out infinite; }
+  @keyframes load { 0% { transform: scaleX(0); } 60% { transform: scaleX(.8); } 100% { transform: scaleX(1); opacity: 0; } }
+  .is-busy button, .is-busy a.kakao { pointer-events: none; opacity: .55; }
+  @media (prefers-reduced-motion: reduce) { .done--new, .bar { animation: none; } }
 </style>
 </head>
 <body>
-<div id="wait">불러오는 중…</div>
-<iframe id="app" title="GTB 참석신청" allow="clipboard-write"></iframe>
-<noscript>이 페이지는 자바스크립트가 켜져 있어야 열립니다.</noscript>
+<div id="app"><div class="sheet"><div class="empty">불러오는 중이에요…</div></div></div>
+
 <script>
-/*
- * GTB 참석신청 껍데기 페이지
- *
- * 하는 일
- *  1) 참석신청 웹앱(Google Apps Script)을 화면 가득 끼워 넣는다. 이렇게 열면 위쪽의 구글 안내 문구가 나오지 않는다.
- *  2) 로그인 정보를 "이 주소"의 저장소에 보관한다. 구글 화면 안의 저장소보다 훨씬 오래 유지된다.
- *  3) 카카오톡 안에서 열었는데 로그인 정보가 없으면, 버튼을 누르지 않아도 카카오 자동 로그인(prompt=none)을 한 번 시도한다.
- *
- * 이 파일에는 비밀 값이 없다. 카카오 키는 Apps Script 안에만 있다.
- */
 (function () {
   'use strict';
-
-  // ▼ 참석신청 웹앱 주소 (Apps Script 배포 주소, /exec 로 끝남). 배포를 새로 만들어 주소가 바뀌면 여기만 고치면 된다.
+  /*
+   * 이 파일은 두 곳에서 똑같이 쓴다.
+   *  (1) Apps Script 가 직접 내보내는 화면: BOOT 가 채워져 있고, 서버와는 google.script.run 으로 통신한다.
+   *  (2) 내 주소(GitHub Pages)에 올린 화면: EXEC 에 웹앱 주소가 들어 있고, 서버와는 fetch 로 데이터만 주고받는다.
+   *      화면이 구글 주소 안에서 열리지 않아 구글 안내 문구가 없고, PC에서 구글 계정을 여러 개 로그인한 경우의 오류와도 무관하다.
+   */
   var EXEC = 'https://script.google.com/macros/s/AKfycbzkbCqzRywLo0maxraiYh9h9Iv3g5UCAe6EmQGjyapAgN7bxE_dl51A8mNgr9I-FsCB/exec';
+  var BOOT = null || {};
+  var REMOTE = !!EXEC;
+  var KEY = REMOTE ? 'gtb.token' : 'moim.session.v1';
+  var TRIED = 'gtb.autoTried';                 // 이번 접속에서 카카오 자동 로그인을 이미 시도했는지(반복 방지)
+  var CAME_BACK = false;                       // 카카오 로그인에서 방금 돌아온 접속인지
+  var DOW = ['일', '월', '화', '수', '목', '금', '토'];
+  var app = document.getElementById('app');
+  var S = { token: '', data: null, tab: 'events', justApplied: '', form: null, editName: false, recent: null, view: 'main', fee: null, feePick: null, drafts: {},
+    range: null, loadingMore: false, scroll: { mode: 'anchor' } };
+  var memToken = '';
 
-  var KEY = 'gtb.token';            // 로그인 정보
-  var TRIED = 'gtb.autoTried';      // 이번 접속에서 자동 로그인을 이미 시도했는지(무한 반복 방지)
+  /* ---------- 작은 도구 ---------- */
+  function h(tag, attrs) {
+    var el = document.createElement(tag), k, i;
+    for (k in (attrs || {})) {
+      var v = attrs[k];
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    for (i = 2; i < arguments.length; i++) add(el, arguments[i]);
+    return el;
+  }
+  function add(el, c) {
+    if (c == null || c === false) return;
+    if (Array.isArray(c)) { c.forEach(function (x) { add(el, x); }); return; }
+    el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  function mount(node) { app.textContent = ''; app.appendChild(node); }
+  function ymd(s) { var p = s.split('-').map(Number); return { y: p[0], m: p[1], d: p[2], dow: new Date(p[0], p[1] - 1, p[2]).getDay() }; }
+  function dayLabel(s) { var p = ymd(s); return p.m + '월 ' + p.d + '일 ' + DOW[p.dow] + '요일'; }
 
-  var frame = document.getElementById('app');
-  var wait = document.getElementById('wait');
+  /**
+   * 껍데기 페이지(내 주소) 안에서 열린 경우 로그인 정보를 그 페이지에도 맡긴다.
+   * 구글 화면 안의 저장소는 브라우저가 자주 비우지만, 내 주소의 저장소는 오래 간다.
+   * 보내는 곳을 껍데기 주소로 못 박아 두므로, 다른 사이트가 이 화면을 끼워 넣어도 로그인 정보를 받을 수 없다.
+   */
+  var VIA = BOOT.via === 'w' && !!BOOT.wrapperOrigin;
+  function tellWrapper(type, extra) {
+    if (!VIA) return;
+    var msg = { gtb: 1, type: type };
+    for (var k in (extra || {})) msg[k] = extra[k];
+    try { window.top.postMessage(msg, BOOT.wrapperOrigin); } catch (e) { /* 껍데기가 없으면 무시 */ }
+  }
 
-  // 다른 사이트가 이 페이지를 끼워 넣은 경우에는 동작하지 않는다(로그인 정보를 가로채려는 시도를 막는다).
-  if (window.top !== window.self) {
-    wait.textContent = '이 페이지는 다른 사이트 안에서는 열 수 없어요.';
+  var store = {
+    get: function () { try { return localStorage.getItem(KEY) || memToken; } catch (e) { return memToken; } },
+    set: function (t) { memToken = t; try { localStorage.setItem(KEY, t); } catch (e) { /* 저장이 막힌 환경: 이번 접속 동안만 유지 */ } tellWrapper('token', { token: t }); },
+    clear: function () { memToken = ''; try { localStorage.removeItem(KEY); } catch (e) { /* 무시 */ } tellWrapper('token', { token: '' }); }
+  };
+
+  function keepRange(data) {
+    S.data = data;
+    if (data && data.stage === 'ready') S.range = { from: data.from, to: data.to };
+  }
+
+  function scrollTop_() { return window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0; }
+  function docHeight_() { return Math.max(document.documentElement.scrollHeight || 0, document.body.scrollHeight || 0); }
+
+  var toastTimer;
+  function toast(msg) {
+    var old = document.querySelector('.toast'); if (old) old.remove();
+    document.body.appendChild(h('div', { class: 'toast', role: 'status', text: msg }));
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { var t = document.querySelector('.toast'); if (t) t.remove(); }, 2800);
+  }
+
+  function setBusy(on) {
+    document.body.classList.toggle('is-busy', on);
+    var bar = document.querySelector('.bar');
+    if (on && !bar) document.body.appendChild(h('div', { class: 'bar' }));
+    if (!on && bar) bar.remove();
+  }
+
+  /** 아래에서 올라오는 확인 창. body 에 DOM 노드를 넣을 수 있다. 확인=true, 닫기=false */
+  function ask(opt) {
+    return new Promise(function (resolve) {
+      var oldToast = document.querySelector('.toast'); if (oldToast) oldToast.remove();
+      var last = document.activeElement;
+      function close(v) { veil.remove(); if (last && last.focus) last.focus(); resolve(v); }
+      var okBtn = h('button', { class: 'btn' + (opt.danger ? ' btn--danger' : ''), type: 'button', text: opt.ok || '확인',
+        onclick: function () { if (opt.check && !opt.check()) return; close(true); } });   // check 가 false 를 돌려주면 창을 닫지 않는다
+      var veil = h('div', { class: 'veil', onclick: function (e) { if (e.target === veil) close(false); } },
+        h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': opt.title },
+          h('h3', { text: opt.title }),
+          opt.text ? h('p', { text: opt.text }) : null,
+          opt.body || null,
+          opt.ok === false ? null : okBtn,
+          h('button', { class: 'btn btn--ghost', type: 'button', text: opt.cancel || '닫기', onclick: function () { close(false); } })));
+      veil.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(false); });
+      document.body.appendChild(veil);
+      (opt.ok === false ? veil.querySelector('.btn--ghost') : okBtn).focus();
+    });
+  }
+
+  function won(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '원'; }
+
+  /** 여러 동작 중 하나를 고르는 창. 고른 값(value)을 돌려주고, 닫으면 null. */
+  function choose(opt) {
+    return new Promise(function (resolve) {
+      var old = document.querySelector('.toast'); if (old) old.remove();
+      function close(v) { veil.remove(); resolve(v); }
+      var veil = h('div', { class: 'veil', onclick: function (e) { if (e.target === veil) close(null); } },
+        h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': opt.title },
+          h('h3', { text: opt.title }), opt.text ? h('p', { text: opt.text }) : null,
+          opt.options.map(function (o) {
+            return h('button', { class: 'btn' + (o.danger ? ' btn--danger' : ''), type: 'button', text: o.label, onclick: function () { close(o.value); } });
+          }),
+          h('button', { class: 'btn btn--ghost', type: 'button', text: '닫기', onclick: function () { close(null); } })));
+      veil.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(null); });
+      document.body.appendChild(veil);
+      veil.querySelector('.btn').focus();
+    });
+  }
+
+  function copyText(text, doneMsg) {
+    function fallback() {
+      var ta = h('textarea', { readonly: true }); ta.value = text;
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+      var ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      ta.remove();
+      if (ok) { toast(doneMsg); return; }
+      var box = h('textarea', { readonly: true }); box.value = text;      // 복사가 막힌 환경: 직접 길게 눌러 복사
+      ask({ title: '길게 눌러 복사해 주세요', body: box, ok: false });
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast(doneMsg); }, fallback);
+    } else fallback();
+  }
+
+  /* ---------- 서버 호출 ---------- */
+  function call(action, payload) {
+    payload = payload || {};
+    if (S.range) { payload.from = S.range.from; payload.to = S.range.to; }   // 위·아래로 더 불러온 구간을 유지
+    if (REMOTE) return post(action, S.token, payload);
+    return new Promise(function (resolve, reject) {
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.ok) resolve(res.data);
+          else reject(res || { code: 'SERVER', message: '응답을 받지 못했어요.' });
+        })
+        .withFailureHandler(function () { reject({ code: 'NETWORK', message: '연결이 고르지 않아요. 잠시 후 다시 시도해 주세요.' }); })
+        .api(action, S.token, payload);
+    });
+  }
+
+  /** 내 주소에서 열린 경우: 웹앱에 데이터만 요청한다. 구글 로그인 정보(쿠키)는 보내지 않는다. */
+  function post(action, token, payload) {
+    var offline = { code: 'NETWORK', message: '연결이 고르지 않아요. 잠시 후 다시 시도해 주세요.' };
+    return new Promise(function (resolve, reject) {
+      fetch(EXEC, {
+        method: 'POST', credentials: 'omit', redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },          // 사전 확인 요청(preflight)이 생기지 않는 형식
+        body: JSON.stringify({ action: action, token: token || '', data: payload || {} })
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        if (res && res.ok) resolve(res.data);
+        else reject(res || { code: 'SERVER', message: '응답을 받지 못했어요.' });
+      }, function () { reject(offline); });
+    });
+  }
+
+  function session(k, v) {
+    try { if (v === undefined) return window.sessionStorage.getItem(k) || ''; window.sessionStorage.setItem(k, v); } catch (e) { /* 막힌 환경 */ }
+    return '';
+  }
+
+  function handleAuth(err) {
+    if (err && err.code === 'AUTH') { store.clear(); S.token = ''; renderLogin('로그인이 끝났어요. 다시 로그인해 주세요.'); return true; }
+    return false;
+  }
+
+  function load(silent) {
+    if (!silent) setBusy(true);
+    return call('state').then(function (data) { setBusy(false); keepRange(data); render(); },
+      function (err) {
+        setBusy(false);
+        if (handleAuth(err)) return;
+        mount(h('div', { class: 'sheet' }, h('div', { class: 'empty' },
+          h('strong', { text: '페이지를 불러오지 못했어요' }), h('span', { text: err.message || '' }),
+          h('div', { class: 'act' }, h('button', { class: 'btn', type: 'button', text: '다시 불러오기', onclick: function () { load(); } })))));
+      });
+  }
+
+  /** 상태를 바꾸는 요청. 성공하면 새 상태로 다시 그리고, 실패하면 이유를 알리고 최신 상태를 다시 받는다. */
+  function act(action, payload, doneMsg) {
+    if (document.body.classList.contains('is-busy')) return Promise.resolve(false);   // 연속으로 두 번 눌러도 한 번만 보낸다
+    setBusy(true);
+    return call(action, payload).then(function (data) {
+      setBusy(false); keepRange(data); render();
+      var msg = typeof doneMsg === 'function' ? doneMsg(data) : doneMsg;
+      if (msg) toast(msg);
+      return true;
+    }, function (err) {
+      setBusy(false);
+      if (handleAuth(err)) return false;
+      toast(err.message || '처리하지 못했어요.');
+      if (err.code !== 'INPUT' && err.code !== 'DUP' && err.code !== 'NETWORK') load(true);
+      return false;
+    });
+  }
+
+  /* ---------- 단독 화면들 ---------- */
+  function solo() {
+    var box = h('div', { class: 'solo' });
+    for (var i = 0; i < arguments.length; i++) add(box, arguments[i]);
+    mount(h('div', { class: 'sheet' }, box));
+  }
+
+  function renderGate() {
+    solo(h('h1', { text: '카카오톡에서 열어 주세요' }),
+      h('p', { text: '이 페이지는 오픈채팅방에 올라온 링크를 카카오톡 앱에서 눌렀을 때만 열려요.' }));
+  }
+
+  function renderSetup() {
+    solo(h('h1', { text: '아직 설정이 끝나지 않았어요' }),
+      h('p', { text: '방장님, 스프레드시트 위쪽의 [모임관리] 메뉴에서 1번부터 3번까지 차례로 마쳐 주세요. 끝난 뒤 이 페이지를 다시 열면 됩니다.' }));
+  }
+
+  function renderLogin(msg, byUser) {
+    // byUser: 사용자가 직접 로그아웃한 경우. 이때는 자동 로그인을 다시 걸지 않는다.
+    tellWrapper(byUser ? 'logout' : 'login', { loginUrl: BOOT.loginUrl });
+    if (REMOTE) {
+      if (byUser) session(TRIED, '1');
+      var canAuto = !byUser && !CAME_BACK && !session(TRIED) && /KAKAOTALK/i.test(navigator.userAgent)
+        && /^https:\/\/kauth\.kakao\.com\/oauth\/authorize\?/.test(BOOT.loginUrl || '');
+      if (canAuto) {
+        // 이미 가입한 회원은 버튼 없이 바로 돌아온다. 처음 오는 사람은 error 와 함께 돌아오고, 그때는 아래 버튼 화면을 본다.
+        session(TRIED, '1');
+        solo(h('p', { text: '로그인 확인 중…' }));
+        window.location.href = BOOT.loginUrl + '&prompt=none';
+        return;
+      }
+    }
+    solo(h('h1', { text: BOOT.clubName }),
+      h('p', { text: '카카오 로그인으로 본인을 확인한 뒤 모임을 신청해요. 이름을 직접 적지 않으니 다른 사람 이름으로 신청할 수 없어요.' }),
+      msg ? h('p', { class: 'err', role: 'alert', text: msg }) : null,
+      h('a', { class: 'kakao', href: BOOT.loginUrl, target: '_top' }, kakaoSymbol(), '카카오 로그인'),
+      h('p', { class: 'fine', text: '카카오 회원번호만 확인해요. 이름·전화번호·프로필 사진은 받지 않습니다.' }));
+  }
+
+  function kakaoSymbol() {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', '20'); svg.setAttribute('height', '20'); svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('aria-hidden', 'true');
+    var path = document.createElementNS(ns, 'path');
+    path.setAttribute('fill', '#000');
+    path.setAttribute('d', 'M10 2.5c-4.7 0-8.5 3-8.5 6.7 0 2.4 1.6 4.5 4 5.7l-.8 3c-.1.3.2.5.5.3l3.6-2.4c.4 0 .8.1 1.2.1 4.7 0 8.5-3 8.5-6.7S14.7 2.5 10 2.5z');
+    svg.appendChild(path);
+    return svg;
+  }
+
+  function refreshIcon() {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', '20'); svg.setAttribute('height', '20'); svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('aria-hidden', 'true');
+    var p = document.createElementNS(ns, 'path');
+    p.setAttribute('d', 'M16 10a6 6 0 1 1-1.8-4.3M16 3.5v3h-3'); p.setAttribute('fill', 'none'); p.setAttribute('stroke', 'currentColor');
+    p.setAttribute('stroke-width', '2'); p.setAttribute('stroke-linecap', 'round'); p.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(p);
+    return svg;
+  }
+
+  function checkIcon() {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', '20'); svg.setAttribute('height', '20'); svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('aria-hidden', 'true');
+    var c = document.createElementNS(ns, 'circle'); c.setAttribute('cx', '10'); c.setAttribute('cy', '10'); c.setAttribute('r', '10'); c.setAttribute('fill', 'currentColor');
+    var p = document.createElementNS(ns, 'path'); p.setAttribute('d', 'M5.5 10.3l3 3 6-6.3'); p.setAttribute('fill', 'none'); p.setAttribute('stroke', 'var(--paper)'); p.setAttribute('stroke-width', '2'); p.setAttribute('stroke-linecap', 'round'); p.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(c); svg.appendChild(p);
+    return svg;
+  }
+
+  function renderRegister(d) {
+    var input = h('input', { type: 'text', maxlength: '30', autocomplete: 'off', placeholder: '예: 달리는곰', value: (d && d.nickname) || '' });
+    function submit() {
+      var name = input.value.trim();
+      if (!name) { toast('대화명을 입력해 주세요.'); input.focus(); return; }
+      S.editName = false;
+      act('register', { nickname: name });
+    }
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+    solo(h('h1', { text: '대화명을 등록해 주세요' }),
+      h('p', { text: '오픈채팅방에서 쓰는 대화명을 그대로 적어 주세요. 처음 한 번만 하면 다음부터는 바로 신청 화면이 열려요.' }),
+      d && d.rejected ? h('p', { class: 'err', text: '지난 요청은 승인되지 않았어요. 대화명을 확인하고 다시 요청해 주세요.' }) : null,
+      h('label', { class: 'field' }, h('span', { text: '오픈채팅 대화명' }), input),
+      h('button', { class: 'btn', type: 'button', text: '등록 요청하기', onclick: submit }));
+  }
+
+  function renderPending(d) {
+    solo(h('h1', { text: '운영진 승인을 기다리고 있어요' }),
+      h('ol', null,
+        h('li', { text: '아래 인증번호를 오픈채팅방에 올려 주세요.' }),
+        h('li', { text: '운영진이 대화명과 번호가 맞는지 보고 승인해요.' }),
+        h('li', { text: '승인되면 이 페이지에서 바로 신청할 수 있어요.' })),
+      h('div', { class: 'code' }, h('b', { text: d.code }), h('span', { text: '등록한 대화명  ' + d.nickname })),
+      h('button', { class: 'btn', type: 'button', text: '인증 문구 복사하기', onclick: function () { copyText('모임 신청 인증번호 ' + d.code, '복사했어요. 오픈채팅방에 붙여 넣어 주세요.'); } }),
+      h('button', { class: 'btn btn--ghost', type: 'button', text: '승인됐는지 확인하기', onclick: function () { load().then(function () { if (S.data && S.data.stage === 'pending') toast('아직 승인 전이에요.'); }); } }),
+      h('button', { class: 'linkbtn', type: 'button', text: '대화명을 잘못 적었어요', onclick: function () { S.editName = true; render(); } }));
+  }
+
+  /* ---------- 모임 목록 ---------- */
+  function renderMain(d) {
+    var stick = h('div', { class: 'stick', id: 'stick' },
+      h('header', { class: 'top' },
+        h('div', { class: 'top__text' }, h('h1', { text: d.clubName }),
+          h('p', null, h('b', { text: d.me.nickname }), ' 님 이름으로 신청돼요')),
+        h('div', { class: 'top__acts' },
+          h('button', { class: 'iconbtn', type: 'button', 'aria-label': '새로고침', title: '새로고침', onclick: function () { load().then(function () { toast('최신 상태예요.'); }); } }, refreshIcon()),
+          h('button', { class: 'feelink', type: 'button', text: '월회비 신청', onclick: openFee }))));
+    var root = h('div', { class: 'sheet' }, stick);
+    if (d.me.isStaff) {
+      var n = d.admin ? d.admin.pending.length : 0;
+      stick.appendChild(h('div', { class: 'tabs', role: 'tablist' },
+        h('button', { type: 'button', role: 'tab', 'aria-selected': String(S.tab === 'events'), text: '모임', onclick: function () { S.tab = 'events'; S.scroll = { mode: 'top' }; render(); } }),
+        h('button', { type: 'button', role: 'tab', 'aria-selected': String(S.tab === 'admin'), onclick: function () { S.tab = 'admin'; S.scroll = { mode: 'top' }; render(); } },
+          '운영진 메뉴', n ? h('span', { class: 'badge', text: String(n), 'aria-label': '승인 대기 ' + n + '명' }) : null)));
+    }
+    add(root, d.me.isStaff && S.tab === 'admin' ? adminView(d) : eventsView(d));
+    root.appendChild(h('button', { class: 'jump', type: 'button', id: 'jump', hidden: 'hidden', onclick: jumpToNext }));
+    mount(root);
+    afterRender();
+  }
+
+  /** 위(지난 모임)·아래(다음 모임)로 더 불러오기 */
+  function loadMore(dir) {
+    var d = S.data;
+    if (!d || d.stage !== 'ready' || S.loadingMore) return;
+    if (dir === 'past' ? !d.hasPast : !d.hasFuture) return;
+    var list = d.events;
+    var cursor = list.length ? (dir === 'past' ? list[0].date : list[list.length - 1].date) : d.today;
+    S.loadingMore = true;
+    var y = scrollTop_(), height = docHeight_();
+    setBusy(true);
+    call('moreEvents', { dir: dir, cursor: cursor }).then(function (r) {
+      S.loadingMore = false; setBusy(false);
+      if (dir === 'past') {
+        d.events = r.events.concat(d.events);
+        d.hasPast = r.hasMore;
+        if (d.events.length && S.range) S.range = { from: d.events[0].date, to: S.range.to };
+        S.scroll = { mode: 'shift', y: y, height: height };      // 위에 붙은 만큼 내려, 보던 자리를 유지
+      } else {
+        d.events = d.events.concat(r.events);
+        d.hasFuture = r.hasMore;
+        if (d.events.length && S.range) S.range = { from: S.range.from, to: d.events[d.events.length - 1].date };
+        S.scroll = { mode: 'keep', y: y };
+      }
+      render();
+      if (!r.events.length) toast(dir === 'past' ? '더 이전 일정이 없어요' : '더 이상 일정이 없어요');
+    }, function (err) {
+      S.loadingMore = false; setBusy(false);
+      if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.');
+    });
+  }
+
+  /** 화면을 다시 그린 뒤 보던 자리를 맞추고, 끝에 닿으면 자동으로 더 불러오게 한다 */
+  function stickHeight_() { var el = document.getElementById('stick'); return el ? el.offsetHeight : 0; }
+
+  /** 아직 끝나지 않은 첫 모임이 고정된 머리말 바로 아래에 오는 스크롤 위치 */
+  function nextTop_() {
+    var el = document.querySelector('.day--next');
+    return el ? Math.max(0, Math.round(scrollTop_() + el.getBoundingClientRect().top - stickHeight_() - 8)) : 0;
+  }
+
+  function jumpToNext() { window.scrollTo(0, nextTop_()); S.scroll = { mode: 'keep', y: scrollTop_() }; }
+
+  function afterRender() {
+    var mode = (S.scroll && S.scroll.mode) || 'keep';
+    if (mode === 'anchor') {
+      window.scrollTo(0, nextTop_());
+    } else if (mode === 'top') {
+      window.scrollTo(0, 0);
+    } else if (mode === 'shift') {
+      window.scrollTo(0, Math.max(0, S.scroll.y + (docHeight_() - S.scroll.height)));
+    } else if (typeof S.scroll.y === 'number') {
+      window.scrollTo(0, S.scroll.y);
+    }
+    S.scroll = { mode: 'keep', y: scrollTop_() };
+    watchEdges();
+  }
+
+  var edgeWatcher = null, nextWatcher = null;
+  function watchEdges() {
+    if (edgeWatcher) { edgeWatcher.disconnect(); edgeWatcher = null; }
+    if (nextWatcher) { nextWatcher.disconnect(); nextWatcher = null; }
+    if (!window.IntersectionObserver || !S.data || S.data.stage !== 'ready' || S.tab !== 'events' || S.view !== 'main') return;
+    var margin = '-' + stickHeight_() + 'px 0px 0px 0px';      // 고정된 머리말에 가려진 부분은 "보이는 것"으로 치지 않는다
+    edgeWatcher = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        if (e.target.id === 'morePast') loadMore('past');
+        if (e.target.id === 'moreFuture') loadMore('future');
+      });
+    }, { rootMargin: margin });     // 화면에 실제로 들어왔을 때만. 열자마자 자동으로 불러오지 않게 한다
+    ['morePast', 'moreFuture'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && el.tagName === 'BUTTON') edgeWatcher.observe(el);
+    });
+    // 다가오는 모임이 화면 밖에 있을 때만 돌아가는 버튼을 보여 준다
+    var next = document.querySelector('.day--next'), jump = document.getElementById('jump');
+    if (!next || !jump) return;
+    nextWatcher = new IntersectionObserver(function (entries) {
+      var e = entries[entries.length - 1];
+      if (e.isIntersecting) { jump.setAttribute('hidden', 'hidden'); return; }
+      jump.textContent = e.boundingClientRect.top < 0 ? '↑ 다가오는 모임으로' : '↓ 다가오는 모임으로';   // 위에 있으면 ↑, 아래에 있으면 ↓
+      jump.removeAttribute('hidden');
+    }, { rootMargin: margin });
+    nextWatcher.observe(next);
+  }
+
+  function eventsView(d) {
+    if (!d.events.length) {
+      return [d.hasPast ? h('button', { class: 'more', type: 'button', id: 'morePast', text: '이전 일정 더 보기', onclick: function () { loadMore('past'); } }) : null,
+        h('div', { class: 'empty' }, h('strong', { text: '예정된 모임이 없어요' }),
+          h('span', { text: d.me.isAdmin ? '[운영진 메뉴]에서 모임을 만들면 여기에 보여요.' : '운영진이 모임을 올리면 여기에 보여요.' }))];
+    }
+    var out = [], byDate = {}, order = [], anchored = false;
+    out.push(d.hasPast
+      ? h('button', { class: 'more', type: 'button', id: 'morePast', text: '이전 일정 더 보기', onclick: function () { loadMore('past'); } })
+      : h('p', { class: 'edge', id: 'morePast', text: '더 이전 일정은 없어요' }));
+    if (d.me.penalized) out.push(h('p', { class: 'note note--warn', style: 'margin:12px 16px 0', text: '회비 정산이 확인되지 않아 신청 순번이 맨 뒤로 적용되고 있어요. 총무에게 확인해 주세요.' }));
+    d.events.forEach(function (ev) { if (!byDate[ev.date]) { byDate[ev.date] = []; order.push(ev.date); } byDate[ev.date].push(ev); });
+    order.forEach(function (date) {
+      var p = ymd(date), isToday = date === d.today, rel = isToday ? '오늘' : date === d.tomorrow ? '내일' : '';
+      var done = byDate[date].every(function (e) { return e.ended; });
+      var next = !done && !anchored; if (next) anchored = true;          // 아직 끝나지 않은 첫 모임 = 페이지를 열면 여기부터 보인다
+      var cls = 'leaf' + (p.dow === 0 ? ' leaf--sun' : p.dow === 6 ? ' leaf--sat' : '') + (isToday && !done ? ' leaf--stamped' : '');
+      out.push(h('section', { class: 'day' + (done ? ' day--past' : '') + (next ? ' day--next' : '') },
+        h('h2', { class: 'vh', text: dayLabel(date) + (rel ? ', ' + rel : '') }),
+        h('div', { class: cls, 'aria-hidden': 'true' },
+          h('div', { class: 'leaf__month', text: p.m + '월' }),
+          h('div', { class: 'leaf__num', text: String(p.d) }),
+          h('div', { class: 'leaf__dow', text: DOW[p.dow] + '요일' }),
+          rel ? h('div', { class: 'leaf__rel', text: rel }) : null,
+          isToday && !done ? h('div', { class: 'stamp' }, d.sameDayApply ? '취소' : '신청', h('br'), '마감') : null),
+        h('div', { class: 'day__events' }, byDate[date].map(function (ev) { return eventBlock(ev, d); }))));
+    });
+    out.push(d.hasFuture
+      ? h('button', { class: 'more', type: 'button', id: 'moreFuture', text: '다음 일정 더 보기', onclick: function () { loadMore('future'); } })
+      : h('p', { class: 'edge', id: 'moreFuture', text: '마지막 일정이에요' }));
+    out.push(h('footer', { class: 'foot' },
+      h('p', { text: '신청한 순서대로 정원까지 참석 확정, 그 뒤는 대기예요.' + (d.guestCutoff ? ' 모임 전날 ' + d.guestCutoff + ' 전에는 회원이 게스트보다 앞 순번입니다.' : '') }),
+      h('p', { text: '취소는 모임 전날 밤 12시까지. 당일 0시부터는 취소할 수 없고(대기는 언제든 가능), 당일 신청은 급참으로 기록돼요.' }),
+      h('button', { class: 'linkbtn', type: 'button', text: '로그아웃', onclick: function () { store.clear(); S.token = ''; S.data = null; renderLogin('', true); } })));
+    return out;
+  }
+
+  function waitIcon() {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', '20'); svg.setAttribute('height', '20'); svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('aria-hidden', 'true');
+    var c = document.createElementNS(ns, 'circle'); c.setAttribute('cx', '10'); c.setAttribute('cy', '10'); c.setAttribute('r', '8.5'); c.setAttribute('fill', 'none'); c.setAttribute('stroke', 'currentColor'); c.setAttribute('stroke-width', '2');
+    var p = document.createElementNS(ns, 'path'); p.setAttribute('d', 'M10 5.5V10l3 2'); p.setAttribute('fill', 'none'); p.setAttribute('stroke', 'currentColor'); p.setAttribute('stroke-width', '2'); p.setAttribute('stroke-linecap', 'round'); p.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(c); svg.appendChild(p);
+    return svg;
+  }
+
+  function findEvent(data, id) {
+    var list = (data && data.events) || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+
+  /** 명단 한 묶음(참석 확정 / 대기 / 연습). 신청한 순서대로 번호를 붙여 한 번에 모두 보여 준다. where: 'confirmed' | 'waiting' | 'practice' */
+  function group(title, list, where, ev, d) {
+    if (!list || !list.length) return null;
+    var cls = where === 'waiting' ? 'grp--wait' : where === 'practice' ? 'grp--practice' : 'grp--in';
+    var ul = h('ul', { class: 'names' });
+    list.forEach(function (a, i) {
+      var parts = [h('span', { class: 'no', text: String(i + 1) }), a.name + (a.me && a.kind !== '게스트' ? ' (나)' : '')];
+      if (a.kind === '게스트') parts.push(h('span', { class: 'by', text: '게스트, ' + a.by + ' 등록' + (ev.guestPending && where === 'confirmed' ? ', 전날 ' + d.guestCutoff + '에 확정' : '') }));
+      if (a.late) parts.push(h('span', { class: 'tagx tagx--late', text: '급참' }));
+      if (a.staff) parts.push(h('span', { class: 'tagx tagx--staff', text: '운영진 등록' }));
+      if (a.mark === '노쇼') parts.push(h('span', { class: 'tagx tagx--no', text: '노쇼' }));
+      if (a.mark === '참석' && where === 'waiting') parts.push(h('span', { class: 'tagx tagx--came', text: '나옴' }));
+      ul.appendChild(h('li', { class: a.me ? 'is-me' : null },
+        (d.me.isStaff || ev.canMark) ? h('button', { type: 'button', 'aria-label': a.name + (d.me.isStaff ? ' 운영진 메뉴' : ' 출결 표시'), onclick: function () { entryMenu(ev, a, where); } }, parts)
+                     : h('span', null, parts)));
+    });
+    return h('div', { class: 'grp ' + cls }, h('h3', { text: title + ' ' + list.length + '명' }), ul);
+  }
+
+  function phoneIcon() {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', '15'); svg.setAttribute('height', '15'); svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('aria-hidden', 'true');
+    var p = document.createElementNS(ns, 'path');
+    p.setAttribute('fill', 'currentColor');
+    p.setAttribute('d', 'M6.6 2.5c.4 0 .8.3.9.7l.9 3.1c.1.4 0 .8-.3 1L6.7 8.6c.9 1.9 2.4 3.4 4.3 4.3l1.3-1.4c.3-.3.7-.4 1-.3l3.1.9c.4.1.7.5.7.9v3c0 .6-.5 1-1 1C8.9 17 3 11.1 3 3.5c0-.6.4-1 1-1h2.6z');
+    svg.appendChild(p);
+    return svg;
+  }
+
+  /** 조퇴·동행 같은 특이사항을 남기는 댓글. */
+  function commentBox(ev) {
+    var box = h('div', { class: 'cmts' });
+    var editable = ev.date >= S.data.today;                                // 지난 모임의 댓글은 고칠 수 없다
+    ev.comments.forEach(function (c) {
+      box.appendChild(h('p', { class: 'cmt' }, h('b', { text: c.name }),
+        h('span', null, c.text, c.edited ? h('small', { class: 'cmt__edited', text: ' (수정됨)' }) : null),
+        h('small', { text: c.at.slice(0, 5).replace('-', '/') + ' ' + c.at.slice(6) }),
+        c.mine && editable ? h('button', { class: 'linkbtn', type: 'button', text: '수정', 'aria-label': c.name + ' 댓글 수정', onclick: function () { editComment(c); } }) : null,
+        (c.mine || S.data.me.isStaff) ? h('button', { class: 'linkbtn', type: 'button', text: '삭제', 'aria-label': c.name + ' 댓글 삭제', onclick: function () {
+          ask({ title: '댓글을 지울까요?', text: c.name + ': ' + c.text, ok: '삭제', danger: true }).then(function (yes) { if (yes) act('commentDelete', { commentId: c.id }, '댓글을 지웠어요'); });
+        } }) : null));
+    });
+    if (ev.date >= S.data.today) {
+      var input = h('input', { type: 'text', maxlength: '100', placeholder: '조퇴·동행 등 특이사항 (예: 7시 조퇴)', 'aria-label': ev.title + ' 댓글' });
+      input.value = S.drafts[ev.id] || '';
+      input.addEventListener('input', function () { S.drafts[ev.id] = input.value; });
+      var send = function () {
+        var text = input.value.trim();
+        if (!text) { toast('내용을 입력해 주세요.'); input.focus(); return; }
+        act('comment', { eventId: ev.id, text: text }, '댓글을 남겼어요').then(function (ok) { if (ok) { S.drafts[ev.id] = ''; render(); } });
+      };
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
+      box.appendChild(h('div', { class: 'cmtform' }, input, h('button', { class: 'btn btn--ghost', type: 'button', text: '등록', onclick: send })));
+    }
+    return box;
+  }
+
+  function editComment(c) {
+    var input = h('input', { type: 'text', maxlength: '100', 'aria-label': '댓글 내용' });
+    input.value = c.text;
+    ask({ title: '댓글 수정', body: h('label', { class: 'field' }, h('span', { text: '내용' }), input), ok: '저장',
+      check: function () { if (input.value.trim()) return true; toast('내용을 입력해 주세요.'); input.focus(); return false; } })
+      .then(function (yes) { if (yes) act('commentEdit', { commentId: c.id, text: input.value.trim() }, '댓글을 수정했어요'); });
+    input.focus();
+  }
+
+  /** 모임 카드 아래 버튼 줄: 운영진 도구(추가 등록 / 노쇼 체크)와 연락처(볼 수 있는 사람에게만) */
+  function staffTools(ev) {
+    var d = S.data, staff = d.me.isStaff;
+    if (!staff && !d.contactsOpen && !ev.canMark) return null;
+    return h('div', { class: 'tools' },
+      ev.canMark ? h('button', { class: 'linkbtn', type: 'button', text: '노쇼 체크', onclick: function () { noShowCheck(ev); } }) : null,
+      staff && ev.started ? h('button', { class: 'linkbtn', type: 'button', text: ev.locked ? '운영진: 출결 확정 해제' : '운영진: 출결 확정', onclick: function () { confirmAttend(ev); } }) : null,
+      staff ? h('button', { class: 'linkbtn', type: 'button', text: '운영진: 추가 등록', onclick: function () { staffAdd(ev); } }) : null,
+      d.contactsOpen ? h('button', { class: 'linkbtn', type: 'button', 'aria-label': '참석 신청 회원 연락처', onclick: function () { showContacts(ev); } }, phoneIcon(), '연락처') : null);
+  }
+
+  /** 참석 신청한 회원(게스트 제외)의 연락처. 누를 때만 서버에서 받아 온다. */
+  function showContacts(ev) {
+    if (document.body.classList.contains('is-busy')) return;
+    setBusy(true);
+    call('contacts', { eventId: ev.id }).then(function (r) {
+      setBusy(false);
+      var total = 0;
+      function part(title, list) {
+        if (!list.length) return null;
+        return [h('p', { class: 'pickhead', text: title + ' ' + list.length + '명' })].concat(list.map(function (a, i) {
+          total++;
+          var who = a.name + (a.year ? '(' + a.year + ')' : '');                      // 이름(년생)
+          return h('div', { class: 'tel' }, h('span', { text: (i + 1) + '. ' + who }),
+            a.phone ? h('a', { href: 'tel:' + a.phone.replace(/[^0-9+]/g, ''), target: '_top', text: a.phone, 'aria-label': a.name + ' 전화 걸기 ' + a.phone }) : h('small', { text: '연락처 없음' }));
+        }));
+      }
+      var body = h('div', null, part('참석 확정', r.confirmed), part('대기', r.waiting), part('연습', r.practice));
+      if (!total) { toast('참석 신청한 회원이 없어요.'); return; }
+      ask({ title: '참석 신청 회원 연락처', body: body, ok: false, cancel: '닫기',
+        text: dayLabel(ev.date) + '  ' + ev.title + '\n이름(년생)과 연락처예요. 게스트는 빠져 있어요. 번호를 누르면 전화가 걸립니다. 조회 기록이 남아요.' });
+    }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
+  }
+
+  function eventBlock(ev, d) {
+    var el = h('article', { class: 'ev' },
+      h('h2', null, ev.time ? h('span', { class: 'ev__time', text: ev.time }) : null, ev.title),
+      ev.place ? h('p', { class: 'ev__sub', text: ev.place }) : null,
+      ev.memo ? h('p', { class: 'ev__sub', text: ev.memo }) : null,
+      h('p', { class: 'ev__count' },
+        h('span', null, '참석 ', h('b', { text: String(ev.confirmedCount) }), '명', ev.capacity ? ' / 정원 ' + ev.capacity + '명' : ''),
+        ev.waitCount ? h('span', null, '대기 ', h('b', { text: String(ev.waitCount) }), '명') : null,
+        ev.practiceCount ? h('span', null, '연습 ', h('b', { text: String(ev.practiceCount) }), '명') : null));
+
+    add(el, group('참석 확정', ev.confirmed, 'confirmed', ev, d));
+    add(el, group('대기', ev.waiting, 'waiting', ev, d));
+    add(el, group('연습', ev.practice, 'practice', ev, d));
+
+    var box = h('div', { class: 'act' });
+    if (ev.my) {
+      var practice = ev.my.kind === '연습';
+      var label = (practice ? '연습으로 신청했어요' : ev.my.waiting ? '대기 ' + ev.my.no + '번이에요' : '참석 확정이에요') + (ev.my.late ? ' (급참)' : '');
+      box.appendChild(h('div', { class: 'done' + (ev.my.waiting ? ' done--wait' : '') + (S.justApplied === ev.id ? ' done--new' : '') },
+        ev.my.waiting ? waitIcon() : checkIcon(), label));
+      if (ev.my.waiting) box.appendChild(h('p', { class: 'note', text: '앞에서 취소가 나오면 순서대로 참석 확정이 돼요. 대기 중에는 언제든 취소할 수 있어요.' }));
+      if (ev.my.canCancel) {
+        box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', text: practice ? '연습 취소' : '신청 취소', onclick: function () { cancel(ev); } }));
+        if (ev.date === d.tomorrow && !ev.my.waiting) box.appendChild(h('p', { class: 'note note--warn', text: '오늘 밤 12시가 지나면 취소할 수 없어요.' }));
+      } else {
+        box.appendChild(h('p', { class: 'note', text: '모임 당일이라 취소할 수 없어요. 사정이 생기면 운영진에게 알려 주세요.' }));
+      }
+    } else if (ev.open) {
+      box.appendChild(h('button', { class: 'btn', type: 'button', text: ev.full ? '대기로 신청하기' : ev.isToday ? '급참 신청하기' : '신청하기', onclick: function () { apply(ev, '참석'); } }));
+      if (ev.full) box.appendChild(h('p', { class: 'note', text: '정원이 차서 대기 ' + (ev.waitCount + 1) + '번으로 신청돼요. 앞에서 취소가 나오면 순서대로 참석 확정이 됩니다.' + (ev.isToday ? ' 오늘 신청은 급참으로 기록돼요.' : '') }));
+      else if (ev.isToday) box.appendChild(h('p', { class: 'note note--warn', text: '오늘 0시가 지나 급참이에요. 급참비 ' + won(d.lateFee) + '이 추가되고 취소할 수 없어요. (' + d.lateClose + ' 마감)' }));
+    } else {
+      box.appendChild(h('p', { class: 'note', text: ev.isToday ? '오늘 모임 신청은 마감됐어요.' : '신청이 마감됐어요.' }));
+    }
+
+    if (ev.open && (!ev.my || ev.canGuest)) {
+      box.appendChild(h('div', { class: 'pair' },
+        !ev.my ? h('button', { class: 'btn btn--ghost', type: 'button', text: '연습 신청', onclick: function () { apply(ev, '연습'); } }) : null,
+        ev.canGuest ? h('button', { class: 'btn btn--ghost', type: 'button', text: '게스트 신청', onclick: function () { guestAdd(ev, d); } }) : null));
+    }
+
+    (ev.myGuests || []).forEach(function (g) {
+      box.appendChild(h('div', { class: 'guest' },
+        h('div', { class: 'guest__who' }, '게스트 ' + g.name,
+          h('small', { text: (g.waiting ? '대기 ' + g.no + '번' : '참석 확정') + (g.canCancel ? '' : ', 당일이라 취소할 수 없어요') })),
+        g.canCancel ? h('button', { class: 'linkbtn', type: 'button', text: '취소', 'aria-label': '게스트 ' + g.name + ' 취소', onclick: function () { guestCancel(ev, g); } }) : null));
+    });
+    el.appendChild(box);
+    if (ev.started) {
+      el.appendChild(h('p', { class: 'note', text: ev.locked ? '출결 확정됨 (' + ev.locked + '). 고칠 내용은 운영진에게 알려 주세요.'
+        : ev.canMark ? '노쇼 체크 중이에요. 안 나온 사람이 있으면 [노쇼 체크]나 이름을 눌러 표시해 주세요. 운영진이 확정하면 마감됩니다.' : '운영진의 출결 확정을 기다리고 있어요.' }));
+    }
+    add(el, staffTools(ev));
+    if (ev.comments) el.appendChild(commentBox(ev));
+    return el;
+  }
+
+  function apply(ev, kind) {
+    var practice = kind === '연습';
+    var go = ev.isToday && !(ev.full && !practice)
+      ? ask({ title: practice ? '오늘 모임에 연습으로 급참할까요?' : '오늘 모임에 급참할까요?', text: '급참비 ' + won(S.data.lateFee) + '이 추가되고, 신청하면 취소할 수 없어요.', ok: practice ? '연습 급참' : '급참 신청' })
+      : Promise.resolve(true);
+    go.then(function (yes) {
+      if (!yes) return;
+      S.justApplied = ev.id;
+      act('apply', { eventId: ev.id, kind: kind }, function (data) {
+        var now = findEvent(data, ev.id);
+        if (!now || !now.my) return '신청했어요';
+        if (now.my.kind === '연습') return '연습으로 신청했어요';
+        return now.my.waiting ? '대기 ' + now.my.no + '번으로 신청했어요' : now.my.late ? '급참으로 참석 확정이에요' : '참석 확정이에요';
+      }).then(function () { S.justApplied = ''; });
+    });
+  }
+
+  function cancel(ev) {
+    var practice = ev.my && ev.my.kind === '연습';
+    ask({ title: practice ? '연습 신청을 취소할까요?' : '신청을 취소할까요?', text: dayLabel(ev.date) + '\n' + ev.title, ok: practice ? '연습 취소' : '신청 취소', danger: true })
+      .then(function (yes) { if (yes) act('cancel', { eventId: ev.id }, practice ? '연습 신청을 취소했어요' : '신청을 취소했어요'); });
+  }
+
+  function guestAdd(ev, d) {
+    var input = h('input', { type: 'text', maxlength: '20', autocomplete: 'off', placeholder: '예: 홍길동' });
+    var text = '명단에 "게스트 이름 (게스트, ' + d.me.nickname + ' 등록)"으로 표시되고 정원에 포함돼요.'
+      + (ev.full ? '\n지금은 정원이 차서 대기로 들어가요.' : '')
+      + (ev.guestPending ? '\n모임 전날 ' + d.guestCutoff + ' 전까지는 회원이 먼저라, 게스트는 그 시각에 남은 자리가 있으면 확정돼요.' : '')
+      + (ev.isToday && !ev.full ? '\n오늘 신청은 급참이라 급참비 ' + won(d.lateFee) + '이 추가되고 취소할 수 없어요.' : '');
+    ask({ title: '게스트 신청', text: text, body: h('label', { class: 'field' }, h('span', { text: '게스트 이름' }), input), ok: '게스트 신청',
+      check: function () { if (input.value.trim()) return true; toast('게스트 이름을 입력해 주세요.'); input.focus(); return false; } })
+      .then(function (yes) {
+        if (!yes) return;
+        var name = input.value.trim();
+        act('guestAdd', { eventId: ev.id, name: name }, name + ' 님을 게스트로 신청했어요');
+      });
+    input.focus();
+  }
+
+  function guestCancel(ev, g) {
+    ask({ title: '게스트 ' + g.name + ' 님의 신청을 취소할까요?', text: dayLabel(ev.date) + '\n' + ev.title, ok: '게스트 취소', danger: true })
+      .then(function (yes) { if (yes) act('guestCancel', { eventId: ev.id, name: g.name }, '게스트 신청을 취소했어요'); });
+  }
+
+  /* ---------- 운영진: 취소 처리 / 추가 등록 / 노쇼 체크 ---------- */
+  function staffCall(action, payload, doneMsg) {
+    if (document.body.classList.contains('is-busy')) return Promise.resolve(false);
+    payload.recent = !!S.recent;                       // 출석 체크 목록을 열어 둔 경우 그 목록도 함께 새로 받는다
+    setBusy(true);
+    return call(action, payload).then(function (r) {
+      setBusy(false); keepRange(r.state); if (r.recent) S.recent = r.recent; render();
+      if (doneMsg) toast(doneMsg);
+      return true;
+    }, function (err) {
+      setBusy(false);
+      if (handleAuth(err)) return false;
+      toast(err.message || '처리하지 못했어요.');
+      return false;
+    });
+  }
+
+  function keyOf(ev, a) {                                  // 운영진은 회원번호로, 일반 회원은 서버가 준 키(k)로 명단의 한 줄을 가리킨다
+    return a.id ? { eventId: ev.id, memberId: a.id, kind: a.kind, guestName: a.kind === '게스트' ? a.name : '' } : { eventId: ev.id, k: a.k };
+  }
+
+  /** 운영진이 명단의 이름을 눌렀을 때: (시작된 모임이면) 노쇼·나옴 표시, 그리고 운영진 권한 취소 처리 */
+  function entryMenu(ev, a, where) {
+    var who = a.kind === '게스트' ? a.name + ' 님(게스트, ' + a.by + ' 등록)' : a.name + ' 님' + (where === 'practice' ? '(연습)' : '');
+    var options = [];
+    if (ev.canMark) {
+      if (where === 'waiting') options.push(a.mark === '참석' ? { label: '나옴 표시 해제', value: '' } : { label: '대기였지만 나왔어요(대기참)', value: '참석' });
+      else options.push(a.mark === '노쇼' ? { label: '노쇼 표시 해제', value: '' } : { label: '노쇼로 표시', value: '노쇼', danger: true });
+    }
+    if (S.data.me.isStaff) options.push({ label: '신청 취소 처리 (운영진 권한)', value: 'remove' });
+    if (!options.length) return;
+    choose({ title: who, text: dayLabel(ev.date) + '\n' + ev.title + (a.staff ? '\n' + a.staff + ' 님이 운영진 권한으로 등록' : '')
+        + (ev.started && where === 'practice' ? '\n연습도 안 나오면 노쇼비가 부과돼요.' : ''), options: options })
+      .then(function (v) {
+        if (v === null) return;
+        var key = keyOf(ev, a);
+        if (v !== 'remove') { key.mark = v; staffCall('attendMark', key, v ? v === '노쇼' ? '노쇼로 표시했어요' : '나온 것으로 표시했어요' : '표시를 해제했어요'); return; }
+        ask({ title: who + '의 신청을 취소 처리할까요?', ok: '취소 처리', danger: true,
+          text: '운영진 권한으로 처리하며, 마감(당일 0시) 뒤에도 할 수 있어요. 누가 처리했는지 기록에 남습니다. 확정 자리가 비면 대기 1번이 자동으로 올라와요.' })
+          .then(function (yes) { if (yes) staffCall('staffRemove', key, '운영진 권한으로 취소 처리했어요'); });
+      });
+  }
+
+  function staffAdd(ev) {
+    var inIds = {};
+    (ev.confirmed || []).concat(ev.waiting || [], ev.practice || []).forEach(function (a) { if (a.kind !== '게스트') inIds[a.id] = true; });
+    var rest = ((S.data.staff && S.data.staff.members) || []).filter(function (m) { return !inIds[m.id]; });
+    if (!rest.length) { toast('모든 회원이 이미 명단에 있어요.'); return; }
+    var who = h('select', { 'aria-label': '회원' }, rest.map(function (m) { return h('option', { value: m.id, text: m.nickname }); }));
+    var kind = h('select', { 'aria-label': '구분' }, h('option', { value: '참석', text: '참석' }), h('option', { value: '연습', text: '연습' }));
+    var sameDayOrPast = ev.date <= S.data.today;
+    var late = h('input', { type: 'checkbox', checked: sameDayOrPast });
+    ask({ title: '운영진 권한으로 추가 등록', ok: '추가 등록',
+      text: dayLabel(ev.date) + '  ' + ev.title + '\n마감 뒤에도 등록할 수 있어요. 명단에 "운영진 등록"으로 표시되고 기록에 남습니다.'
+        + (ev.started ? '\n이미 시작된 모임이라 실제로 나온 것으로 기록돼요.' : ''),
+      body: h('div', null, h('label', { class: 'field' }, h('span', { text: '회원' }), who), h('label', { class: 'field' }, h('span', { text: '구분' }), kind),
+        sameDayOrPast ? h('label', { class: 'check' }, late, '급참비 부과 (당일 신청인 경우)') : null) })
+      .then(function (yes) { if (yes) staffCall('staffAdd', { eventId: ev.id, memberId: who.value, kind: kind.value, late: sameDayOrPast && late.checked }, '운영진 권한으로 등록했어요'); });
+  }
+
+  function confirmAttend(ev) {
+    if (ev.locked) {
+      ask({ title: '출결 확정을 해제할까요?', text: dayLabel(ev.date) + '  ' + ev.title + '\n해제하면 회원들도 다시 노쇼 체크를 고칠 수 있어요(당일에 한해).', ok: '확정 해제' })
+        .then(function (yes) { if (yes) staffCall('attendConfirm', { eventId: ev.id, unlock: true }, '출결 확정을 해제했어요'); });
+      return;
+    }
+    var noshow = (ev.confirmed || []).concat(ev.practice || []).filter(function (a) { return a.mark === '노쇼'; }).map(function (a) { return a.name; });
+    var came = (ev.waiting || []).filter(function (a) { return a.mark === '참석'; }).map(function (a) { return a.name; });
+    ask({ title: '이대로 출결을 확정할까요?', ok: '출결 확정',
+      text: dayLabel(ev.date) + '  ' + ev.title + '\n노쇼 ' + noshow.length + '명' + (noshow.length ? ': ' + noshow.join(', ') : '') + '\n대기참 ' + came.length + '명' + (came.length ? ': ' + came.join(', ') : '')
+        + '\n\n확정하면 회원들은 더 고칠 수 없고 운영진만 고칠 수 있어요.' })
+      .then(function (yes) { if (yes) staffCall('attendConfirm', { eventId: ev.id }, '출결을 확정했어요'); });
+  }
+
+  /** 노쇼 체크: 안 나온 사람(확정·연습)과 대기였지만 나온 사람을 한 번에 고르고 저장한다. */
+  function noShowCheck(ev) {
+    var picks = [];
+    function rows(list, where) {
+      return (list || []).map(function (a, i) {
+        var box = h('input', { type: 'checkbox', checked: where === 'waiting' ? a.mark === '참석' : a.mark === '노쇼' });
+        picks.push({ a: a, where: where, box: box });
+        return h('label', { class: 'pick' }, box, h('span', null, (i + 1) + '. ' + a.name,
+          a.kind === '게스트' ? h('small', { text: '  게스트, ' + a.by + ' 등록' }) : null, a.late ? h('small', { text: '  급참' }) : null));
+      });
+    }
+    var body = h('div', null,
+      (ev.confirmed || []).length ? h('p', { class: 'pickhead' }, '참석 확정 ', h('small', { text: '안 나온 사람을 체크' })) : null, rows(ev.confirmed, 'confirmed'),
+      (ev.practice || []).length ? h('p', { class: 'pickhead' }, '연습 ', h('small', { text: '안 나온 사람을 체크 (노쇼비 부과)' })) : null, rows(ev.practice, 'practice'),
+      (ev.waiting || []).length ? h('p', { class: 'pickhead' }, '대기 ', h('small', { text: '실제로 나온 사람을 체크 (대기참)' })) : null, rows(ev.waiting, 'waiting'));
+    if (!picks.length) { toast('명단이 비어 있어요.'); return; }
+    ask({ title: '노쇼 체크', text: dayLabel(ev.date) + '  ' + ev.title + '\n체크하지 않은 확정자는 나온 것으로 정산돼요. 저장한 뒤에도 다시 열어 고칠 수 있어요.', body: body, ok: '저장' })
+      .then(function (yes) {
+        if (!yes) return;
+        var noshow = [], came = [];
+        picks.forEach(function (p) { if (p.box.checked) (p.where === 'waiting' ? came : noshow).push(keyOf(ev, p.a)); });
+        staffCall('attendCheck', { eventId: ev.id, noshow: noshow, came: came }, '노쇼 ' + noshow.length + '명' + (came.length ? ', 대기참 ' + came.length + '명' : '') + '으로 저장했어요');
+      });
+  }
+
+  function adminView(d) {
+    var f = S.form || (S.form = { date: d.tomorrow, time: '', title: '', place: '', capacity: '', memo: '', repeat: '1' });
+    function bind(name, attrs, tag) {
+      var el = h(tag || 'input', attrs); el.value = f[name];
+      el.addEventListener('input', function () { f[name] = el.value; });
+      return el;
+    }
+    var pending = h('section', { class: 'panel' }, h('h2', { text: '승인 대기' }),
+      h('p', { text: '오픈채팅방에 같은 대화명으로 같은 번호가 올라왔는지 확인하고 승인해 주세요.' }));
+    if (!d.admin.pending.length) pending.appendChild(h('p', { text: '기다리는 회원이 없어요.' }));
+    d.admin.pending.forEach(function (m) {
+      pending.appendChild(h('div', { class: 'req' },
+        h('div', { class: 'req__who' }, h('b', { text: m.nickname }), h('span', { text: m.at })),
+        h('div', { class: 'req__code', 'aria-label': '인증번호 ' + m.code, text: m.code }),
+        h('button', { class: 'btn', type: 'button', text: '승인', onclick: function () { act('adminMember', { memberId: m.id, approve: true }, m.nickname + ' 님을 승인했어요'); } }),
+        h('button', { class: 'btn btn--ghost', type: 'button', text: '거절', onclick: function () { act('adminMember', { memberId: m.id, approve: false }, '거절했어요'); } })));
+    });
+
+    var create = h('section', { class: 'panel' }, h('h2', { text: '모임 만들기' }),
+      h('p', { text: '같은 모임을 여러 날 이어서 열려면 아래 "며칠 연속"을 늘려 주세요.' }),
+      h('div', { class: 'row2' },
+        h('label', { class: 'field' }, h('span', { text: '날짜' }), bind('date', { type: 'date', min: d.today })),
+        h('label', { class: 'field' }, h('span', { text: '시간' }), bind('time', { type: 'time' }))),
+      h('label', { class: 'field' }, h('span', { text: '제목' }), bind('title', { type: 'text', maxlength: '60', placeholder: '예: 저녁 정기 모임' })),
+      h('label', { class: 'field' }, h('span', null, '장소 ', h('small', { text: '(선택)' })), bind('place', { type: 'text', maxlength: '60' })),
+      h('div', { class: 'row2' },
+        h('label', { class: 'field' }, h('span', null, '정원 ', h('small', { text: '(비우면 제한 없음)' })), bind('capacity', { type: 'number', min: '0', max: '9999', inputmode: 'numeric' })),
+        h('label', { class: 'field' }, h('span', { text: '며칠 연속' }), bind('repeat', { type: 'number', min: '1', max: '31', inputmode: 'numeric' }))),
+      h('label', { class: 'field' }, h('span', null, '메모 ', h('small', { text: '(선택)' })), bind('memo', { type: 'text', maxlength: '200' })),
+      h('button', { class: 'btn', type: 'button', text: '모임 만들기', onclick: function () {
+        if (!f.date) { toast('날짜를 골라 주세요.'); return; }
+        if (!f.title.trim()) { toast('모임 제목을 입력해 주세요.'); return; }
+        act('adminCreate', f, '모임을 만들었어요').then(function (ok) { if (ok) { S.form = null; S.tab = 'events'; render(); } });
+      } }));
+
+    var help = h('section', { class: 'panel' }, h('h2', { text: '시트에서 하는 일' }),
+      h('p', { text: '회원 대화명 고치기, 이용 막기(상태 칸을 "차단"으로), 등급("운영진"이라고 적으면 참석비 무료 + 이 운영진 메뉴 전체 사용), 후순위(Y를 적으면 신청 순번이 맨 뒤, 안 쓰면 비워 둠), 이름(정산용, 대화명이 실명이면 비워 둠), 연락처, 년생은 스프레드시트의 [회원] 시트에서 직접 바꾸면 바로 반영돼요. 요금과 마감 시각은 [설정] 시트에 있습니다. 모임을 취소하려면 [모임] 시트에서 그 줄의 상태 칸을 "취소"로 바꾸세요. 날짜별 참석·대기·연습 명단은 [모임] 시트에, 신청·취소 기록은 [신청로그] 시트에 쌓입니다. 모임 화면에서 이름을 누르면 운영진 권한으로 취소 처리하거나 노쇼를 표시할 수 있어요.' }));
+    return [pending, recentView(d), billView(d), fillView(), create, help];
+  }
+
+  /* ---------- 운영진: 출석 체크(지난 모임) ---------- */
+  function loadRecent(doneMsg) {
+    if (document.body.classList.contains('is-busy')) return;
+    setBusy(true);
+    call('staffRecent').then(function (data) { setBusy(false); S.recent = data; render(); if (doneMsg) toast(doneMsg); },
+      function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
+  }
+
+  function recentView(d) {
+    var box = h('section', { class: 'panel' }, h('h2', { text: '출석 체크' }),
+      h('p', { text: '노쇼 체크 시작 시각이 지난 모임(오늘 포함 최근 10일)이 나옵니다. [운영진: 노쇼 체크]를 눌러 안 나온 사람을 한 번에 고르거나, 이름을 눌러 한 명씩 표시하세요. 표시가 없으면 참석 확정자는 나온 것으로, 대기자는 안 나온 것으로 정산됩니다.' }));
+    if (!S.recent) {
+      box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', text: '최근 모임 불러오기', onclick: function () { loadRecent(); } }));
+      return box;
+    }
+    if (!S.recent.events.length) box.appendChild(h('p', { text: '아직 시작된 모임이 없어요.' }));
+    S.recent.events.forEach(function (ev) {
+      var p = ymd(ev.date);
+      box.appendChild(h('div', { class: 'rec' },
+        h('h3', null, p.m + '/' + p.d + '(' + DOW[p.dow] + ') ' + ev.title, h('small', { text: ev.date === S.recent.today ? '오늘' : '' })),
+        group('참석 확정', ev.confirmed, 'confirmed', ev, d), group('대기', ev.waiting, 'waiting', ev, d), group('연습', ev.practice, 'practice', ev, d),
+        staffTools(ev)));
+    });
+    box.appendChild(h('div', { class: 'tools' }, h('button', { class: 'linkbtn', type: 'button', text: '새로 불러오기', onclick: function () { loadRecent('최신 상태예요.'); } })));
+    return box;
+  }
+
+  /* ---------- 운영진: 회원 명부에서 연락처·년생 연결 ---------- */
+  function fillView() {
+    function run() {
+      if (document.body.classList.contains('is-busy')) return;
+      setBusy(true);
+      call('adminFill').then(function (r) {
+        setBusy(false);
+        ask({ title: '명부와 연결했어요', ok: false, cancel: '확인',
+          text: '연락처 ' + r.phones + '칸, 년생 ' + r.years + '칸을 회원 명부와 연결했어요. 명부가 바뀌면 [회원] 시트의 이 칸들도 저절로 바뀝니다.'
+            + (r.manual ? '\n직접 다른 값을 적어 둔 ' + r.manual + '칸은 그대로 뒀어요.' : '')
+            + (r.unmatched.length ? '\n\n명부에서 찾지 못했거나 동명이인이라 비워 둔 회원 ' + r.unmatched.length + '명\n' + r.unmatched.slice(0, 20).join(', ') + '\n[회원] 시트의 연락처·년생 칸에 직접 적어 주세요.' : '') });
+      }, function (err) { setBusy(false); if (!handleAuth(err)) ask({ title: '채우지 못했어요', text: err.message || '', ok: false, cancel: '확인' }); });
+    }
+    return h('section', { class: 'panel' }, h('h2', { text: '연락처·년생 명부 연결' }),
+      h('p', { text: '회원 명부에서 대화명과 같은 이름을 찾아 [회원] 시트의 연락처·년생 칸을 명부와 연결해요. 연결된 칸은 명부가 바뀌면 저절로 바뀌고, 그 칸에 값을 직접 적으면 그 칸만 연결이 끊겨 적은 값이 쓰입니다. 새로 등록하는 회원은 자동으로 연결돼요.' }),
+      h('button', { class: 'btn btn--ghost', type: 'button', text: '명부와 연결하기', onclick: run }));
+  }
+
+  /* ---------- 운영진: 월 정산 ---------- */
+  function billView(d) {
+    var t = ymd(d.today), thisMonth = d.today.slice(0, 7);
+    var prev = t.m === 1 ? (t.y - 1) + '-12' : t.y + '-' + (t.m - 1 < 10 ? '0' : '') + (t.m - 1);
+    function run(month) {
+      if (document.body.classList.contains('is-busy')) return;
+      setBusy(true);
+      call('adminBill', { month: month }).then(function (r) {
+        setBusy(false);
+        var list = h('ul', { class: 'result' }, r.warnings.map(function (w) { return h('li', { text: w }); }));
+        ask({ title: month + ' 정산을 만들었어요', ok: false, cancel: '확인',
+          text: '끝난 모임 ' + r.events + '회, 회원 ' + r.members + '명, 청구 합계 ' + won(r.total) + '\n스프레드시트의 "' + r.sheet + '", "' + r.detailSheet + '" 시트에서 확인하세요.'
+            + (r.warningCount ? '\n\n확인이 필요한 항목 ' + r.warningCount + '건' + (r.warningCount > r.warnings.length ? ' (일부만 표시, 전체는 시트 아래쪽)' : '') : ''),
+          body: r.warningCount ? list : null });
+      }, function (err) { setBusy(false); if (!handleAuth(err)) ask({ title: '정산하지 못했어요', text: err.message || '', ok: false, cancel: '확인' }); });
+    }
+    return h('section', { class: 'panel' }, h('h2', { text: '월 정산' }),
+      h('p', { text: '끝난 모임만 계산해 스프레드시트에 "정산 (월)" 시트를 만들어요. 지정요일·운영진은 참석비 무료, 그 외 일 참석비·급참비·노쇼비·게스트비가 회원별로 합산됩니다. 다시 누르면 그 달 시트를 새로 채웁니다.' }),
+      h('div', { class: 'pair' },
+        h('button', { class: 'btn btn--ghost', type: 'button', text: prev + ' 정산', onclick: function () { run(prev); } }),
+        h('button', { class: 'btn btn--ghost', type: 'button', text: thisMonth + ' 정산', onclick: function () { run(thisMonth); } })));
+  }
+
+  /* ---------- 월회비 신청 ---------- */
+  function openFee() {
+    if (document.body.classList.contains('is-busy')) return;
+    S.scroll = { mode: 'top' };
+    setBusy(true);
+    call('feeState').then(function (r) { setBusy(false); S.fee = r; S.feePick = S.feePick || { month: r.months[0].month, days: {}, paid: null }; S.view = 'fee'; render(); window.scrollTo(0, 0); },
+      function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
+  }
+
+  function feePlan(f, days) {
+    var man = function (n) { return (n / 10000) + '만원'; };
+    var wk = ['월', '화', '수', '목', '금'].filter(function (x) { return days[x]; }), we = ['토', '일'].filter(function (x) { return days[x]; });
+    var rows = [], total = 0, p = f.prices;
+    if (wk.length >= 4) rows.push({ label: '평일5일(' + man(p.week5) + ')', days: '월~금 전체', price: p.week5 });
+    else if (wk.length) rows.push({ label: '평일' + wk.length + '일(' + man(p['week' + wk.length]) + ')', days: wk.join(', '), price: p['week' + wk.length] });
+    if (we.length === 2) rows.push({ label: '토일(' + man(p.weekend2) + ')', days: '토, 일', price: p.weekend2 });
+    else if (we.length === 1) rows.push({ label: we[0] + '(' + man(p.weekend1) + ')', days: we[0], price: p.weekend1 });
+    rows.forEach(function (r) { total += r.price; });
+    return { rows: rows, total: total, weekdays: wk.length, upgraded: wk.length === 4 };
+  }
+
+  /** 고른 요일을 그 달에 일 참석비로 모두 냈을 때의 금액(비교용) */
+  function dailyCost(f, month, days) {
+    var y = Number(month.slice(0, 4)), m = Number(month.slice(5, 7)), last = new Date(y, m, 0).getDate(), sum = 0;
+    for (var d = 1; d <= last; d++) {
+      var w = DOW[new Date(y, m - 1, d).getDay()];
+      if (days[w]) sum += (w === '토' || w === '일') ? f.prices.weekendDay : f.prices.weekday;
+    }
+    return sum;
+  }
+
+  function renderFee() {
+    var f = S.fee, pick = S.feePick;
+    var cur = f.months.filter(function (x) { return x.month === pick.month; })[0] || f.months[0];
+    var mm = Number(cur.month.slice(5, 7));
+    var back = h('button', { class: 'linkbtn', type: 'button', text: '참석신청으로 돌아가기', onclick: function () { S.view = 'main'; S.scroll = { mode: 'anchor' }; render(); } });
+    var root = h('div', { class: 'sheet' },
+      h('div', { class: 'stick', id: 'stick' },
+        h('header', { class: 'top' }, h('div', { class: 'top__text' }, h('h1', { text: '월회비 신청' }), h('p', null, h('b', { text: f.nickname }), ' 님 이름으로 신청돼요')), back)));
+    var panel = h('section', { class: 'panel' });
+    root.appendChild(panel);
+
+    if (f.legacy) {
+      panel.appendChild(h('p', { class: 'note', text: '아직 예전 구글 설문으로 회비 신청을 받는 상태예요. 운영진이 새 양식으로 전환하면 여기서 신청할 수 있어요.' }));
+      if (f.isAdmin) {
+        var keep = S.data.today.slice(0, 7);
+        panel.appendChild(h('div', { class: 'act' }, h('button', { class: 'btn', type: 'button', text: '새 양식으로 전환 (' + keep + ' 신청만 가져오기)', onclick: function () {
+          ask({ title: '회비신청을 새 양식으로 전환할까요?', ok: '전환', text: '관리 시트 [회비신청] 탭의 예전 설문 내용을 지우고 ' + keep + ' 신청 내역만 남겨요. 이후 신청은 이 화면에서 받아 같은 탭에 쌓입니다. 원본 설문 응답 시트는 그대로예요.' })
+            .then(function (yes) {
+              if (!yes) return;
+              setBusy(true);
+              call('adminMigrateFees', { month: keep }).then(function (r) { setBusy(false); toast(r.month + ' 신청 ' + r.moved + '건을 옮겼어요'); S.feePick = null; openFee(); },
+                function (err) { setBusy(false); if (!handleAuth(err)) ask({ title: '전환하지 못했어요', text: err.message || '', ok: false, cancel: '확인' }); });
+            });
+        } })));
+      }
+      mount(root); return;
+    }
+
+    panel.appendChild(h('div', { class: 'seg', role: 'group', 'aria-label': '신청할 달' }, f.months.map(function (x, i) {
+      return h('button', { type: 'button', 'aria-pressed': String(x.month === cur.month), text: (i === 0 ? '다음 달 ' : '이번 달 ') + Number(x.month.slice(5, 7)) + '월',
+        onclick: function () { pick.month = x.month; render(); } });
+    })));
+    if (cur.note) panel.appendChild(h('p', { class: 'note note--warn', text: cur.note }));
+    if (cur.mine) {
+      panel.appendChild(h('p', { class: 'note', text: mm + '월 신청 완료: ' + (cur.mine.days.join(', ') || '요일 없음') + ' / ' + won(cur.mine.total) + ' / 입금 ' + (cur.mine.paid ? '했다고 표시' : '전') + ' (' + cur.mine.at.slice(5) + ')\n다시 신청하면 마지막 신청 내용으로 바뀌어요.' }));
+    }
+
+    var p = f.prices, tr = function (a, b) { return h('tr', null, h('td', { text: a }), h('td', { text: b })); };
+    panel.appendChild(h('h2', { text: '요금 안내' }));
+    panel.appendChild(h('table', { class: 'plan' },
+      tr('평일 5일 (월~금 전체)', won(p.week5)), tr('평일 3일', won(p.week3)), tr('평일 2일', won(p.week2)), tr('평일 1일', won(p.week1)),
+      tr('주말 2일 (토·일)', won(p.weekend2)), tr('주말 1일 (토 또는 일)', won(p.weekend1)),
+      tr('지정하지 않은 날 참석', '평일 ' + won(p.weekday) + ' / 주말 ' + won(p.weekendDay))));
+
+    panel.appendChild(h('h2', { text: mm + '월에 나올 요일을 골라 주세요' }));
+    panel.appendChild(h('div', { class: 'days', role: 'group', 'aria-label': '요일 선택' }, ['월', '화', '수', '목', '금', '토', '일'].map(function (w) {
+      return h('button', { type: 'button', class: w === '토' ? 'is-sat' : w === '일' ? 'is-sun' : null, 'aria-pressed': String(!!pick.days[w]), text: w,
+        onclick: function () { pick.days[w] = !pick.days[w]; render(); } });
+    })));
+
+    var plan = feePlan(f, pick.days);
+    var box = h('div', { class: 'price' });
+    if (!plan.rows.length) box.appendChild(h('p', { class: 'fine', style: 'margin:0;color:var(--ink-2)', text: '요일을 고르면 가장 싼 요금제가 계산돼요.' }));
+    plan.rows.forEach(function (r) { box.appendChild(h('div', { class: 'price__row' }, h('span', { text: r.label + '  ' + r.days }), h('span', { text: won(r.price) }))); });
+    if (plan.rows.length) {
+      box.appendChild(h('div', { class: 'price__total' }, h('span', { text: '입금할 금액' }), h('span', null, h('b', { text: String(plan.total).replace(/\B(?=(\d{3})+(?!\d))/g, ',') }), '원')));
+      var daily = dailyCost(f, cur.month, pick.days);
+      if (daily > plan.total) box.appendChild(h('p', { class: 'fine', style: 'margin:8px 0 0;color:var(--ink-2)', text: '같은 요일을 매번 일 참석비로 내면 ' + mm + '월 기준 ' + won(daily) + '이에요. ' + won(daily - plan.total) + ' 절약.' }));
+    }
+    panel.appendChild(box);
+    if (plan.upgraded) panel.appendChild(h('p', { class: 'note', text: '평일 4일은 평일5일 요금이 가장 싸요. 평일 전체(월~금)가 지정요일로 신청됩니다.' }));
+    else if (plan.weekdays === 3) panel.appendChild(h('p', { class: 'note', text: won(p.week5 - p.week3) + '만 더 내면 평일 전체(월~금)를 지정할 수 있어요.' }));
+
+    panel.appendChild(h('h2', { text: '입금 안내' }));
+    panel.appendChild(h('p', { class: 'fine', style: 'white-space:pre-line;margin:0 0 12px', text: '계좌  ' + f.account + '\n입금자명  ' + f.nickname + mm + '회비\n기한  전월 ' + f.deadlineDay + '일까지 신청·입금' }));
+    panel.appendChild(h('div', { class: 'seg', role: 'group', 'aria-label': '입금 여부' },
+      h('button', { type: 'button', 'aria-pressed': String(pick.paid === true), text: '입금했어요', onclick: function () { pick.paid = true; render(); } }),
+      h('button', { type: 'button', 'aria-pressed': String(pick.paid === false), text: '24시간 안에 입금할게요', onclick: function () { pick.paid = false; render(); } })));
+    panel.appendChild(h('button', { class: 'btn', type: 'button', text: mm + '월 회비 신청하기', onclick: function () {
+      var days = Object.keys(pick.days).filter(function (w) { return pick.days[w]; });
+      if (!days.length) { toast('요일을 하나 이상 골라 주세요.'); return; }
+      if (pick.paid === null) { toast('입금 여부를 골라 주세요.'); return; }
+      if (document.body.classList.contains('is-busy')) return;
+      setBusy(true);
+      call('feeApply', { month: cur.month, days: days, paid: pick.paid }).then(function (r) {
+        setBusy(false); S.fee = r; S.feePick = { month: cur.month, days: {}, paid: null }; render(); window.scrollTo(0, 0);
+        toast(mm + '월 회비를 신청했어요. ' + won(plan.total));
+      }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '신청하지 못했어요.'); });
+    } }));
+    mount(root);
+  }
+
+  /* ---------- 시작 ---------- */
+  function render() {
+    var d = S.data;
+    if (!d) return;
+    if (S.view === 'fee' && S.fee && d.stage === 'ready') return renderFee();
+    if (d.stage === 'register' || S.editName) return renderRegister(d);
+    if (d.stage === 'pending') return renderPending(d);
+    if (d.stage === 'blocked') return solo(h('h1', { text: '이용이 제한된 계정이에요' }), h('p', { text: '운영진에게 문의해 주세요.' }));
+    renderMain(d);
+  }
+
+  function start() {
+    if (!BOOT.configured) { renderSetup(); return; }
+    if (BOOT.kakaoOnly && !/KAKAOTALK/i.test(navigator.userAgent)) { renderGate(); return; }
+    if (BOOT.tokenRejected) store.clear();                 // 보관하던 로그인 정보가 만료됨: 지운다
+    if (BOOT.token) store.set(BOOT.token);
+    S.token = BOOT.token || store.get();
+    if (!S.token) { renderLogin(BOOT.error); return; }
+    if (!BOOT.token) tellWrapper('token', { token: S.token });   // 이쪽 저장소에만 남아 있던 경우: 껍데기에도 맡긴다
+    tellWrapper('ready');
+    if (BOOT.state && BOOT.token) { keepRange(BOOT.state); render(); }   // 서버가 첫 화면 내용을 함께 보내 준 경우
+    else load();
+  }
+
+  if (!REMOTE) { start(); return; }
+
+  // ── 내 주소(GitHub Pages)에서 열린 경우 ──
+  if (window.top !== window.self) {                       // 다른 사이트가 이 화면을 끼워 넣은 경우에는 동작하지 않는다
+    solo(h('p', { text: '이 페이지는 다른 사이트 안에서는 열 수 없어요.' }));
     try { window.top.location = window.location.href; } catch (e) { /* 무시 */ }
     return;
   }
+  var q = {};
+  window.location.search.replace(/[?&]([^=&#]+)=([^&#]*)/g, function (_, k, v) { q[k] = decodeURIComponent(v.replace(/\+/g, ' ')); });
+  CAME_BACK = !!(q.code || q.error);
+  if (CAME_BACK && window.history && window.history.replaceState) window.history.replaceState(null, '', window.location.pathname);   // 주소창의 인가 코드는 바로 지운다
+  var selfUrl = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '/');
 
-  function read(store, k) { try { return store.getItem(k) || ''; } catch (e) { return ''; } }
-  function write(store, k, v) { try { if (v) store.setItem(k, v); else store.removeItem(k); } catch (e) { /* 저장이 막힌 환경 */ } }
-  function param(name) {
-    var m = new RegExp('[?&]' + name + '=([^&#]*)').exec(window.location.search);
-    return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '';
+  function boot() {
+    solo(h('p', { text: '불러오는 중이에요…' }));
+    var ask = { back: selfUrl };
+    if (q.code && q.state) { ask.code = q.code; ask.state = q.state; }
+    else if (!q.error) ask.t = store.get();               // 자동 로그인이 안 돼서 돌아온 경우(q.error)는 그냥 로그인 화면으로
+    q = {};                                               // 인가 코드는 한 번만 쓴다
+    post('boot', '', ask).then(function (b) { BOOT = b; start(); }, function (err) {
+      solo(h('h1', { text: '연결하지 못했어요' }), h('p', { text: (err && err.message) || '잠시 후 다시 시도해 주세요.' }),
+        h('button', { class: 'btn', type: 'button', text: '다시 시도', onclick: boot }));
+    });
   }
-  function showWait(text, over) { wait.textContent = text; wait.className = over ? 'over' : ''; wait.removeAttribute('hidden'); }
-  function hideWait() { wait.setAttribute('hidden', 'hidden'); }
-
-  var code = param('code'), state = param('state'), kakaoError = param('error');
-  var cameBack = !!(code || kakaoError);                       // 카카오 로그인에서 방금 돌아온 접속
-  var inKakaoTalk = /KAKAOTALK/i.test(navigator.userAgent);
-  var token = read(window.localStorage, KEY);
-
-  // 주소창에 남은 인가 코드는 바로 지운다(새로고침·공유 때 다시 쓰이지 않게).
-  if (cameBack && window.history && window.history.replaceState) {
-    window.history.replaceState(null, '', window.location.pathname);
-  }
-
-  var src = EXEC + '?via=w';
-  if (code && state) src += '&code=' + encodeURIComponent(code) + '&state=' + encodeURIComponent(state);
-  else if (kakaoError) src += '&auto=fail';                    // 자동 로그인이 안 된 경우(처음 오는 사람 등): 로그인 버튼 화면을 보여 준다
-  else if (token) src += '&t=' + encodeURIComponent(token);
-  frame.src = src;
-
-  window.addEventListener('message', function (ev) {
-    var d = ev.data;
-    if (!d || d.gtb !== 1) return;
-    // 보낸 곳 확인: 구글이 웹앱을 돌리는 주소이고, 이 페이지 안에 끼워진 화면이어야 한다.
-    if (!/^https:\/\/[a-z0-9-]+\.googleusercontent\.com$/.test(ev.origin)) return;
-    try { if (!ev.source || ev.source.top !== window) return; } catch (e) { return; }
-
-    if (d.type === 'token') {
-      write(window.localStorage, KEY, typeof d.token === 'string' ? d.token : '');
-      return;
-    }
-    if (d.type === 'ready') { hideWait(); return; }
-    if (d.type === 'logout') {                                 // 직접 로그아웃: 이번 접속에서는 자동 로그인을 다시 걸지 않는다
-      write(window.localStorage, KEY, '');
-      write(window.sessionStorage, TRIED, '1');
-      hideWait();
-      return;
-    }
-    if (d.type === 'login') {                                  // 로그인이 필요한 상태
-      write(window.localStorage, KEY, '');
-      var url = typeof d.loginUrl === 'string' ? d.loginUrl : '';
-      var canAuto = inKakaoTalk && !cameBack && !read(window.sessionStorage, TRIED)
-        && /^https:\/\/kauth\.kakao\.com\/oauth\/authorize\?/.test(url);
-      if (!canAuto) { hideWait(); return; }
-      // 카카오톡 안에서는 이미 가입한 회원이면 버튼 없이 바로 로그인된다. 안 되면 error 와 함께 돌아오고, 그때는 버튼 화면을 보여 준다.
-      write(window.sessionStorage, TRIED, '1');
-      showWait('로그인 확인 중…', true);
-      window.location.href = url + '&prompt=none';
-    }
-  });
-
-  // 안쪽 화면이 신호를 보내지 못하는 경우에도 안내 문구가 계속 남지 않게 한다.
-  frame.addEventListener('load', function () { window.setTimeout(hideWait, 1500); });
+  boot();
 })();
 </script>
 </body>

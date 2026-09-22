@@ -80,7 +80,15 @@
   .grp h3 { margin: 0 0 6px; font-size: 13px; font-weight: 800; }
   .grp--wait h3, .grp--practice h3 { color: var(--ink-2); }
   .names { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .names li { position: relative; }
   .names li > * { display: block; padding: 3px 9px; border: 1px solid var(--line); border-radius: 14px; font-size: 13px; line-height: 20px; background: none; max-width: 100%; text-align: left; }
+  /* 생일 이벤트: 이름 칩의 오른쪽 위 모서리에 살짝 겹치는 +1 */
+  .names li > .plus1 { position: absolute; top: -7px; right: -6px; z-index: 1; display: block; min-width: 22px; height: 18px; padding: 0 5px; border: 0; border-radius: 9px; box-sizing: border-box;
+    background: #f2b21b; color: #1f2733; font: 800 11px/18px var(--num); letter-spacing: 0; text-align: center; box-shadow: 0 0 0 2px var(--paper); pointer-events: none; }
+  .names li.is-bday > * { border-color: #f2b21b; }
+  .bday-note { margin: 0 0 8px; padding: 8px 12px; border-radius: 8px; background: #fff3d1; color: #5a3d00; font-size: 14px; font-weight: 700; line-height: 1.4; }
+  .bday-note b { font-weight: 800; }
+  @media (prefers-color-scheme: dark) { .bday-note { background: #4a3a10; color: #ffe2a0; } }
   .names .no { font: 700 14px/1 var(--num); color: var(--ink-2); margin-right: 5px; }
   .names .by { font-size: 11px; color: var(--ink-2); margin-left: 5px; }
   .tagx { display: inline-block; margin-left: 5px; padding: 0 5px; border: 1px solid currentColor; border-radius: 8px; font-size: 11px; font-weight: 700; line-height: 15px; vertical-align: 1px; }
@@ -654,6 +662,12 @@
       var done = byDate[date].every(function (e) { return e.ended; });
       var next = !done && !anchored; if (next) anchored = true;          // 아직 끝나지 않은 첫 모임 = 페이지를 열면 여기부터 보인다
       var cls = 'leaf' + (p.dow === 0 ? ' leaf--sun' : p.dow === 6 ? ' leaf--sat' : '') + (isToday && !done ? ' leaf--stamped' : '');
+      var celebrants = [];
+      byDate[date].forEach(function (e) { (e.birthdays || []).forEach(function (n) { if (celebrants.indexOf(n) < 0) celebrants.push(n); }); });
+      var mine = celebrants.indexOf(d.me.nickname) >= 0;
+      var bdayNote = celebrants.length ? h('p', { class: 'bday-note', role: 'note' }, '🎂 ',
+        mine ? [h('b', { text: d.me.nickname }), ' 님, 생일 축하드려요!' + (celebrants.length > 1 ? ' (' + celebrants.filter(function (n) { return n !== d.me.nickname; }).join(', ') + ' 님도 생일)' : '')]
+             : [(isToday ? '오늘은 ' : ''), h('b', { text: celebrants.join(', ') }), ' 님 생일이에요. 축하해 주세요!']) : null;
       out.push(h('section', { class: 'day' + (done ? ' day--past' : '') + (next ? ' day--next' : '') },
         h('h2', { class: 'vh', text: dayLabel(date) + (rel ? ', ' + rel : '') }),
         h('div', { class: cls, 'aria-hidden': 'true' },
@@ -662,7 +676,7 @@
           h('div', { class: 'leaf__dow', text: DOW[p.dow] + '요일' }),
           rel ? h('div', { class: 'leaf__rel', text: rel }) : null,
           isToday && !done ? h('div', { class: 'stamp' }, d.sameDayApply ? '취소' : '신청', h('br'), '마감') : null),
-        h('div', { class: 'day__events' }, byDate[date].map(function (ev) { return eventBlock(ev, d); }))));
+        h('div', { class: 'day__events' }, bdayNote, byDate[date].map(function (ev) { return eventBlock(ev, d); }))));
     });
     out.push(d.hasFuture
       ? h('button', { class: 'more', type: 'button', id: 'moreFuture', text: '다음 일정 더 보기', onclick: function () { loadMore('future'); } })
@@ -702,9 +716,10 @@
       if (a.staff) parts.push(h('span', { class: 'tagx tagx--staff', text: '운영진 등록' }));
       if (a.mark === '노쇼') parts.push(h('span', { class: 'tagx tagx--no', text: '노쇼' }));
       if (a.mark === '참석' && where === 'waiting') parts.push(h('span', { class: 'tagx tagx--came', text: '나옴' }));
-      ul.appendChild(h('li', { class: a.me ? 'is-me' : null },
+      ul.appendChild(h('li', { class: (a.me ? 'is-me' : '') + (a.bday ? ' is-bday' : '') || null },
         (d.me.isStaff || ev.canMark) ? h('button', { type: 'button', 'aria-label': a.name + (d.me.isStaff ? ' 운영진 메뉴' : ' 출결 표시'), onclick: function () { entryMenu(ev, a, where); } }, parts)
-                     : h('span', null, parts)));
+                     : h('span', null, parts),
+        a.bday ? h('i', { class: 'plus1', text: '+1', title: '생일 이벤트 +1', 'aria-label': '생일 이벤트 +1' }) : null));
     });
     return h('div', { class: 'grp ' + cls }, h('h3', { text: title + ' ' + list.length + '명' }), ul);
   }

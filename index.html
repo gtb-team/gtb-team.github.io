@@ -42,6 +42,9 @@
   /* 머리말 */
   /* 머리말(과 운영진 탭)은 스크롤해도 화면 위에 붙어 있다. 목록을 위·아래로 끝없이 불러오기 때문에 맨 위로 돌아가지 않아도 닿아야 한다. */
   .stick { position: -webkit-sticky; position: sticky; top: 0; z-index: 10; background: var(--paper); border-bottom: 1px solid var(--line); }
+  .preview { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 16px; background: #fff3d1; color: #5a3d00; font-size: 13px; font-weight: 700; }
+  .preview .linkbtn { color: #5a3d00; font-size: 13px; }
+  @media (prefers-color-scheme: dark) { .preview { background: #4a3a10; color: #ffe2a0; } .preview .linkbtn { color: #ffe2a0; } }
   .top { display: flex; align-items: center; gap: 10px; padding: 8px 16px; min-height: 56px; }
   .top__text { flex: 1; min-width: 0; }
   .top h1 { margin: 0; font-size: 17px; line-height: 1.25; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -260,7 +263,7 @@
   var CAME_BACK = false;                       // 카카오 로그인에서 방금 돌아온 접속인지
   var DOW = ['일', '월', '화', '수', '목', '금', '토'];
   var app = document.getElementById('app');
-  var S = { token: '', data: null, tab: 'events', justApplied: '', form: null, editName: false, recent: null, view: 'main', fee: null, feePick: null, drafts: {},
+  var S = { token: '', data: null, tab: 'events', justApplied: '', form: null, editName: false, recent: null, view: 'main', fee: null, feePick: null, drafts: {}, asMember: false,
     range: null, loadingMore: false, scroll: { mode: 'anchor' } };
   var memToken = '';
 
@@ -313,7 +316,7 @@
     if (data && data.stage === 'ready') {
       var wide = !!(prev && prev.widened && prev.from === data.from && prev.to === data.to);   // 위·아래로 넓힌 목록은 기억해 두지 않는다
       S.range = { from: data.from, to: data.to, widened: wide };
-      if (REMOTE && !wide) saveSnapshot(data);
+      if (REMOTE && !wide && !S.asMember) saveSnapshot(data);
     }
   }
   function saveSnapshot(data) {
@@ -410,6 +413,7 @@
   function call(action, payload) {
     payload = payload || {};
     if (S.range) { payload.from = S.range.from; payload.to = S.range.to; }   // 위·아래로 더 불러온 구간을 유지
+    if (S.asMember) payload.asMember = true;                                 // 운영진의 회원 화면 미리보기
     if (REMOTE) return post(action, S.token, payload);
     return new Promise(function (resolve, reject) {
       google.script.run
@@ -585,6 +589,10 @@
         h('div', { class: 'top__acts' },
           h('button', { class: 'iconbtn', type: 'button', 'aria-label': '새로고침', title: '새로고침', onclick: function () { load().then(function () { toast('최신 상태예요.'); }); } }, refreshIcon()),
           h('button', { class: 'feelink', type: 'button', text: '월회비 신청', onclick: openFee }))));
+    if (S.asMember) {
+      stick.appendChild(h('div', { class: 'preview' }, h('span', { text: '회원 화면 미리보기 중 (운영진 권한 없음)' }),
+        h('button', { class: 'linkbtn', type: 'button', text: '운영진 화면으로', onclick: function () { S.asMember = false; S.scroll = { mode: 'anchor' }; load(); } })));
+    }
     var root = h('div', { class: 'sheet' }, stick);
     if (d.me.isStaff) {
       var n = d.admin ? d.admin.pending.length : 0;
@@ -1150,7 +1158,10 @@
 
     var help = h('section', { class: 'panel' }, h('h2', { text: '시트에서 하는 일' }),
       h('p', { text: '회원 대화명 고치기, 이용 막기(상태 칸을 "차단"으로), 등급("운영진"이라고 적으면 참석비 무료 + 이 운영진 메뉴 전체 사용), 후순위(Y를 적으면 신청 순번이 맨 뒤, 안 쓰면 비워 둠), 이름(정산용, 대화명이 실명이면 비워 둠), 연락처, 년생은 스프레드시트의 [회원] 시트에서 직접 바꾸면 바로 반영돼요. 요금과 마감 시각은 [설정] 시트에 있습니다. 모임을 취소하려면 [모임] 시트에서 그 줄의 상태 칸을 "취소"로 바꾸세요. 날짜별 참석·대기·연습 명단은 [모임] 시트에, 신청·취소 기록은 [신청로그] 시트에 쌓입니다. 모임 화면에서 이름을 누르면 운영진 권한으로 취소 처리하거나 노쇼를 표시할 수 있어요.' }));
-    return [pending, recentView(d), billView(d), fillView(), create, help];
+    var preview = h('section', { class: 'panel' }, h('h2', { text: '회원 화면 미리보기' }),
+      h('p', { text: '일반 회원에게 어떻게 보이는지 확인해요. 미리보기 동안은 운영진 권한도 꺼지므로 실제 회원과 똑같이 동작합니다. 위쪽 노란 띠의 [운영진 화면으로]로 돌아옵니다.' }),
+      h('button', { class: 'btn btn--ghost', type: 'button', text: '회원 화면으로 보기', onclick: function () { S.asMember = true; S.tab = 'events'; S.scroll = { mode: 'anchor' }; load(); } }));
+    return [pending, recentView(d), billView(d), fillView(), preview, create, help];
   }
 
   /* ---------- 운영진: 출석 체크(지난 모임) ---------- */

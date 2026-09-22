@@ -10,9 +10,12 @@
 <meta property="og:description" content="참석 신청 · 월회비 신청">
 <meta property="og:type" content="website">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&text=0123456789%3A-%2C&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&text=0123456789%3A-%2C&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&text=0123456789%3A-%2C&display=swap"></noscript>
 <style>
   :root {
     --desk: #E7EBF0; --paper: #FFFFFF; --ink: #17202B; --ink-2: #566273; --line: #D3DAE3;
@@ -283,13 +286,33 @@
   var store = {
     get: function () { try { return localStorage.getItem(KEY) || memToken; } catch (e) { return memToken; } },
     set: function (t) { memToken = t; try { localStorage.setItem(KEY, t); } catch (e) { /* 저장이 막힌 환경: 이번 접속 동안만 유지 */ } tellWrapper('token', { token: t }); },
-    clear: function () { memToken = ''; try { localStorage.removeItem(KEY); } catch (e) { /* 무시 */ } tellWrapper('token', { token: '' }); }
+    clear: function () { memToken = ''; try { localStorage.removeItem(KEY); } catch (e) { /* 무시 */ } clearSnapshot(); tellWrapper('token', { token: '' }); }
   };
 
+  var SNAP = 'gtb.lastState';        // 마지막으로 받은 화면 내용(내 주소에서 열린 경우만). 다음에 열 때 먼저 보여 주고 곧바로 최신으로 바꾼다
   function keepRange(data) {
+    var prev = S.range;
     S.data = data;
-    if (data && data.stage === 'ready') S.range = { from: data.from, to: data.to };
+    if (data && data.stage === 'ready') {
+      var wide = !!(prev && prev.widened && prev.from === data.from && prev.to === data.to);   // 위·아래로 넓힌 목록은 기억해 두지 않는다
+      S.range = { from: data.from, to: data.to, widened: wide };
+      if (REMOTE && !wide) saveSnapshot(data);
+    }
   }
+  function saveSnapshot(data) {
+    try { window.localStorage.setItem(SNAP, JSON.stringify({ token: S.token, at: Date.now(), state: data })); } catch (e) { /* 저장이 막힌 환경 */ }
+  }
+  function loadSnapshot(token) {
+    try {
+      var raw = window.localStorage.getItem(SNAP);
+      if (!raw) return null;
+      var snap = JSON.parse(raw);
+      if (!snap || snap.token !== token || !snap.state || snap.state.stage !== 'ready') return null;
+      if (Date.now() - snap.at > 3 * 24 * 3600 * 1000) return null;        // 사흘 넘은 것은 쓰지 않는다
+      return snap.state;
+    } catch (e) { return null; }
+  }
+  function clearSnapshot() { try { window.localStorage.removeItem(SNAP); } catch (e) { /* 무시 */ } }
 
   function scrollTop_() { return window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0; }
   function docHeight_() { return Math.max(document.documentElement.scrollHeight || 0, document.body.scrollHeight || 0); }
@@ -574,12 +597,12 @@
       if (dir === 'past') {
         d.events = r.events.concat(d.events);
         d.hasPast = r.hasMore;
-        if (d.events.length && S.range) S.range = { from: d.events[0].date, to: S.range.to };
+        if (d.events.length && S.range) S.range = { from: d.events[0].date, to: S.range.to, widened: true };
         S.scroll = { mode: 'shift', y: y, height: height };      // 위에 붙은 만큼 내려, 보던 자리를 유지
       } else {
         d.events = d.events.concat(r.events);
         d.hasFuture = r.hasMore;
-        if (d.events.length && S.range) S.range = { from: S.range.from, to: d.events[d.events.length - 1].date };
+        if (d.events.length && S.range) S.range = { from: S.range.from, to: d.events[d.events.length - 1].date, widened: true };
         S.scroll = { mode: 'keep', y: y };
       }
       render();
@@ -1266,12 +1289,22 @@
   var selfUrl = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '/');
 
   function boot() {
-    solo(h('p', { text: '불러오는 중이에요…' }));
     var ask = { back: selfUrl };
     if (q.code && q.state) { ask.code = q.code; ask.state = q.state; }
     else if (!q.error) ask.t = store.get();               // 자동 로그인이 안 돼서 돌아온 경우(q.error)는 그냥 로그인 화면으로
     q = {};                                               // 인가 코드는 한 번만 쓴다
-    post('boot', '', ask).then(function (b) { BOOT = b; start(); }, function (err) {
+    // 지난번에 본 화면이 있으면 먼저 보여 준다(위쪽 진행 막대가 도는 동안 최신 내용을 받아 와 바꿔 그린다)
+    var early = ask.t ? loadSnapshot(ask.t) : null;
+    if (early) { S.token = ask.t; S.data = early; S.range = { from: early.from, to: early.to }; S.stale = true; render(); setBusy(true); }
+    else solo(h('p', { text: '불러오는 중이에요…' }));
+    post('boot', '', ask).then(function (b) {
+      setBusy(false); S.stale = false; BOOT = b;
+      if (early && !b.token) { S.data = null; }           // 로그인이 풀렸다면 기억해 둔 화면은 버린다
+      if (early && b.state && b.state.today !== early.today) S.scroll = { mode: 'anchor' };   // 날짜가 바뀌었으면 다가오는 모임 위치로 다시 맞춘다
+      start();
+    }, function (err) {
+      setBusy(false);
+      if (early) { toast('최신 내용을 받지 못했어요. 지난번에 본 화면이에요.'); S.stale = true; return; }
       solo(h('h1', { text: '연결하지 못했어요' }), h('p', { text: (err && err.message) || '잠시 후 다시 시도해 주세요.' }),
         h('button', { class: 'btn', type: 'button', text: '다시 시도', onclick: boot }));
     });

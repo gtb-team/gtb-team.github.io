@@ -263,7 +263,7 @@
   var CAME_BACK = false;                       // 카카오 로그인에서 방금 돌아온 접속인지
   var DOW = ['일', '월', '화', '수', '목', '금', '토'];
   var app = document.getElementById('app');
-  var S = { token: '', data: null, tab: 'events', justApplied: '', form: null, editName: false, recent: null, view: 'main', fee: null, feePick: null, drafts: {}, asMember: false,
+  var S = { token: '', data: null, tab: 'events', justApplied: '', form: null, editName: false, recent: null, view: 'main', fee: null, feePick: null, drafts: {}, asMember: false, contacts: {},
     range: null, loadingMore: false, scroll: { mode: 'anchor' } };
   var memToken = '';
 
@@ -338,11 +338,11 @@
   function docHeight_() { return Math.max(document.documentElement.scrollHeight || 0, document.body.scrollHeight || 0); }
 
   var toastTimer;
-  function toast(msg) {
+  function toast(msg, ms) {
     var old = document.querySelector('.toast'); if (old) old.remove();
     document.body.appendChild(h('div', { class: 'toast', role: 'status', text: msg }));
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { var t = document.querySelector('.toast'); if (t) t.remove(); }, 2800);
+    toastTimer = setTimeout(function () { var t = document.querySelector('.toast'); if (t) t.remove(); }, ms || 2800);
   }
 
   function setBusy(on) {
@@ -434,10 +434,15 @@
         method: 'POST', credentials: 'omit', redirect: 'follow',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },          // 사전 확인 요청(preflight)이 생기지 않는 형식
         body: JSON.stringify({ action: action, token: token || '', data: payload || {} })
-      }).then(function (r) { return r.json(); }).then(function (res) {
+      }).then(function (r) {
+        return r.text().then(function (t) {
+          try { return JSON.parse(t); }
+          catch (e) { throw { code: 'BADRESPONSE', message: '서버가 이상한 응답을 보냈어요(' + r.status + '). 잠시 후 다시 시도해 주세요.' }; }
+        });
+      }).then(function (res) {
         if (res && res.ok) resolve(res.data);
         else reject(res || { code: 'SERVER', message: '응답을 받지 못했어요.' });
-      }, function () { reject(offline); });
+      }, function (e) { reject(e && e.code ? e : offline); });
     });
   }
 
@@ -736,7 +741,7 @@
     out.push(h('footer', { class: 'foot' },
       h('p', { text: '신청한 순서대로 정원까지 참석 확정, 그 뒤는 대기예요.' + (d.guestCutoff ? ' 모임 전날 ' + d.guestCutoff + ' 전에는 회원이 게스트보다 앞 순번입니다.' : '') }),
       h('p', { text: '취소는 모임 전날 밤 12시까지. 당일 0시부터는 취소할 수 없고(대기는 언제든 가능), 당일 신청은 급참으로 기록돼요.' }),
-      h('button', { class: 'linkbtn', type: 'button', text: '로그아웃', onclick: function () { store.clear(); S.token = ''; S.data = null; renderLogin('', true); } })));
+      h('button', { class: 'linkbtn', type: 'button', text: '로그아웃', onclick: function () { store.clear(); S.token = ''; S.data = null; S.contacts = {}; renderLogin('', true); } })));
     return out;
   }
 
@@ -1026,14 +1031,35 @@
           .then(function (yes) { if (yes) staffCall('staffRemove', keyOf(ev, a), '운영진 권한으로 취소 처리했어요'); });
       } })));
     }
-    // 연락처는 창을 연 뒤에 받아 와 채운다(누른 순간에만 전달되고 조회 기록이 남는다)
+    // 연락처는 창을 연 뒤에 받아 와 채운다(누른 순간에만 전달되고 조회 기록이 남는다). 한 번 받은 사람은 이번 접속 동안 기억해 둔다.
     if (d.contactsOpen && !isGuest) {
-      call('contactOne', keyOf(ev, a)).then(function (c) {
-        var slot = who.lastChild;
-        if (!slot || slot.tagName !== 'SMALL') return;
-        if (c.year) nameEl.textContent = nameEl.textContent.replace(a.name, a.name + '(' + c.year + ')');
-        who.replaceChild(c.phone ? h('a', { href: 'tel:' + c.phone.replace(/[^0-9+]/g, ''), target: '_top', text: c.phone, 'aria-label': a.name + ' 전화 걸기 ' + c.phone }) : h('small', { text: '연락처 없음' }), slot);
-      }, function () { var slot = who.lastChild; if (slot && slot.tagName === 'SMALL') slot.textContent = '연락처를 불러오지 못했어요'; });
+      var ckey = ev.id + '|' + (a.id || a.k || a.name);
+      var show = function (c) {
+        var slot = who.querySelector('small, a');
+        if (c.year && nameEl.textContent.indexOf('(' + c.year + ')') < 0) nameEl.textContent = nameEl.textContent.replace(a.name, a.name + '(' + c.year + ')');
+        var node = c.phone ? h('a', { href: 'tel:' + c.phone.replace(/[^0-9+]/g, ''), target: '_top', text: c.phone, 'aria-label': a.name + ' 전화 걸기 ' + c.phone }) : h('small', { text: '연락처 없음' });
+        if (slot) who.replaceChild(node, slot); else who.appendChild(node);
+      };
+      var fail = function (msg) {
+        var slot = who.querySelector('small');
+        if (!slot) return;
+        slot.textContent = '';
+        slot.appendChild(document.createTextNode(msg + ' '));
+        slot.appendChild(h('button', { class: 'linkbtn', type: 'button', text: '다시 시도', onclick: function () { slot.textContent = '연락처 확인 중…'; fetchContact(); } }));
+      };
+      var fetchContact = function () {
+        var done = false;
+        var timer = window.setTimeout(function () { if (!done) { done = true; fail('응답이 늦어요.'); } }, 15000);
+        call('contactOne', keyOf(ev, a)).then(function (c) {
+          if (done) return; done = true; window.clearTimeout(timer);
+          S.contacts[ckey] = c;
+          try { show(c); } catch (e) { fail('표시 오류: ' + (e && e.message || e)); }
+        }, function (err) {
+          if (done) return; done = true; window.clearTimeout(timer);
+          fail((err && err.message) || '연락처를 불러오지 못했어요.');
+        });
+      };
+      if (S.contacts[ckey]) show(S.contacts[ckey]); else fetchContact();
     }
     ask({ title: dayLabel(ev.date) + '  ' + ev.title, body: body, ok: boxes.length ? '저장' : false, cancel: boxes.length ? '취소' : '닫기',
       text: boxes.length ? (ev.locked ? '출결이 확정된 모임이에요. 운영진 권한으로 고칩니다.' : '저장한 뒤에도 다시 열어 고칠 수 있어요.') : '' })
@@ -1392,17 +1418,24 @@
     var early = ask.t ? loadSnapshot(ask.t) : null;
     if (early) { S.token = ask.t; S.data = early; S.range = { from: early.from, to: early.to }; S.stale = true; render(); setBusy(true); }
     else solo(h('p', { text: '불러오는 중이에요…' }));
-    post('boot', '', ask).then(function (b) {
-      setBusy(false); S.stale = false; BOOT = b;
-      if (early && !b.token) { S.data = null; }           // 로그인이 풀렸다면 기억해 둔 화면은 버린다
-      if (early && b.state && b.state.today !== early.today) S.scroll = { mode: 'anchor' };   // 날짜가 바뀌었으면 다가오는 모임 위치로 다시 맞춘다
-      start();
-    }, function (err) {
-      setBusy(false);
-      if (early) { toast('최신 내용을 받지 못했어요. 지난번에 본 화면이에요.'); S.stale = true; return; }
-      solo(h('h1', { text: '연결하지 못했어요' }), h('p', { text: (err && err.message) || '잠시 후 다시 시도해 주세요.' }),
-        h('button', { class: 'btn', type: 'button', text: '다시 시도', onclick: boot }));
-    });
+    var tries = 0;
+    function attempt() {
+      tries++;
+      post('boot', '', ask).then(function (b) {
+        setBusy(false); S.stale = false; BOOT = b;
+        if (early && !b.token) { S.data = null; }           // 로그인이 풀렸다면 기억해 둔 화면은 버린다
+        if (early && b.state && b.state.today !== early.today) S.scroll = { mode: 'anchor' };   // 날짜가 바뀌었으면 다가오는 모임 위치로 다시 맞춘다
+        start();
+      }, function (err) {
+        if (tries < 3) { window.setTimeout(attempt, 1500 * tries); return; }   // 일시적인 오류는 조용히 다시 시도한다
+        setBusy(false);
+        var why = (err && err.message) || '';
+        if (early) { toast('최신 내용을 받지 못했어요. 지난번에 본 화면이에요. ' + why, 6000); S.stale = true; return; }
+        solo(h('h1', { text: '연결하지 못했어요' }), h('p', { text: why || '잠시 후 다시 시도해 주세요.' }),
+          h('button', { class: 'btn', type: 'button', text: '다시 시도', onclick: function () { tries = 0; attempt(); } }));
+      });
+    }
+    attempt();
   }
   boot();
 })();

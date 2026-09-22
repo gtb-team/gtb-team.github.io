@@ -114,6 +114,12 @@
   .pick input { flex: none; width: 22px; height: 22px; }
   .pick small { color: var(--ink-2); }
   .tel { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 6px 2px; border-top: 1px solid var(--line); font-size: 15px; }
+  .who { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; padding: 4px 0 10px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+  .who__name { font-size: 17px; font-weight: 800; }
+  .who__sub { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 400; color: var(--ink-2); }
+  .who a { flex: none; color: var(--sat); font: 700 20px/1 var(--num); text-decoration: none; }
+  .who small { flex: none; color: var(--ink-2); }
+  button.leaf__ft { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; font-family: inherit; cursor: pointer; }
   .tel a { flex: none; color: var(--sat); font: 700 19px/1 var(--num); letter-spacing: 0.02em; text-decoration: none; }
   .tel small { color: var(--ink-2); }
   .linkbtn svg { vertical-align: -2px; margin-right: 3px; }
@@ -711,7 +717,8 @@
           rel ? h('div', { class: 'leaf__rel', text: rel }) : null,
           isToday && !done ? h('div', { class: 'stamp' }, d.sameDayApply ? '취소' : '신청', h('br'), '마감') : null,
           byDate[date].filter(function (e) { return e.freethrow; }).map(function (e) {        // 자유투 꼴찌(음료수 당번): 이름과 이달 횟수
-            return h('div', { class: 'leaf__ft', title: '자유투 꼴찌' }, '🥤 꼴찌', h('b', { text: e.freethrow.name }), h('i', { text: '이달 ' + e.freethrow.count + '회' }));
+            return h('button', { class: 'leaf__ft', type: 'button', 'aria-label': '자유투 꼴찌 ' + e.freethrow.name + ', 이달 순위 보기', onclick: function () { showRank(e); } },
+              '🥤 꼴찌', h('b', { text: e.freethrow.name }), h('i', { text: '이달 ' + e.freethrow.count + '회' }));
           })),
         h('div', { class: 'day__events' }, bdayNote, byDate[date].map(function (ev) { return eventBlock(ev, d); }))));
     });
@@ -755,7 +762,7 @@
       if (a.mark === '참석' && where === 'waiting') parts.push(h('span', { class: 'tagx tagx--came', text: '나옴' }));
       if (a.ft) parts.push(h('span', { class: 'tagx tagx--ft', text: '🥤 꼴찌' }));
       ul.appendChild(h('li', { class: (a.me ? 'is-me' : '') + (a.bday ? ' is-bday' : '') || null },
-        (d.me.isStaff || ev.canMark) ? h('button', { type: 'button', 'aria-label': a.name + (d.me.isStaff ? ' 운영진 메뉴' : ' 출결 표시'), onclick: function () { entryMenu(ev, a, where); } }, parts)
+        (d.me.isStaff || ev.canMark || (d.contactsOpen && a.k)) ? h('button', { type: 'button', 'aria-label': a.name + (d.me.isStaff ? ' 운영진 메뉴' : ' 상세'), onclick: function () { entryMenu(ev, a, where); } }, parts)
                      : h('span', null, parts),
         a.bday ? h('i', { class: 'plus1', text: '+1', title: '생일 이벤트 +1', 'aria-label': '생일 이벤트 +1' }) : null));
     });
@@ -831,12 +838,12 @@
   function staffTools(ev) {
     var d = S.data, staff = d.me.isStaff;
 
+    if (!staff) return null;                                // 회원에게는 버튼 줄이 없다: 연락처·노쇼 체크·꼴찌는 이름을 눌러서
     return h('div', { class: 'tools' },
-      ev.canMark ? h('button', { class: 'linkbtn', type: 'button', text: '노쇼 체크', onclick: function () { noShowCheck(ev); } }) : null,
-      staff && ev.started ? h('button', { class: 'linkbtn', type: 'button', text: ev.locked ? '운영진: 출결 확정 해제' : '운영진: 출결 확정', onclick: function () { confirmAttend(ev); } }) : null,
-      staff ? h('button', { class: 'linkbtn', type: 'button', text: '운영진: 추가 등록', onclick: function () { staffAdd(ev); } }) : null,
-      h('button', { class: 'linkbtn', type: 'button', text: '🥤 이달 꼴찌 순위', onclick: function () { showRank(ev); } }),
-      d.contactsOpen ? h('button', { class: 'linkbtn', type: 'button', 'aria-label': '참석 신청 회원 연락처', onclick: function () { showContacts(ev); } }, phoneIcon(), '연락처') : null);
+      ev.started ? h('button', { class: 'linkbtn', type: 'button', text: '운영진: 노쇼 체크', onclick: function () { noShowCheck(ev); } }) : null,
+      ev.started ? h('button', { class: 'linkbtn', type: 'button', text: ev.locked ? '운영진: 출결 확정 해제' : '운영진: 출결 확정', onclick: function () { confirmAttend(ev); } }) : null,
+      h('button', { class: 'linkbtn', type: 'button', text: '운영진: 추가 등록', onclick: function () { staffAdd(ev); } }),
+      d.contactsOpen ? h('button', { class: 'linkbtn', type: 'button', 'aria-label': '참석 신청 회원 연락처', onclick: function () { showContacts(ev); } }, phoneIcon(), '연락처 전체') : null);
   }
 
   /** 참석 신청한 회원(게스트 제외)의 연락처. 누를 때만 서버에서 받아 온다. */
@@ -985,26 +992,53 @@
   }
 
   /** 운영진이 명단의 이름을 눌렀을 때: (시작된 모임이면) 노쇼·나옴 표시, 그리고 운영진 권한 취소 처리 */
+  /** 이름을 눌렀을 때: 연락처 + (노쇼 체크 시간이면) 출결·자유투 꼴찌 체크 + (운영진) 취소 처리 */
   function entryMenu(ev, a, where) {
-    var who = a.kind === '게스트' ? a.name + ' 님(게스트, ' + a.by + ' 등록)' : a.name + ' 님' + (where === 'practice' ? '(연습)' : '');
-    var options = [];
+    var d = S.data, staff = d.me.isStaff, isGuest = a.kind === '게스트';
+    var nameEl = h('div', { class: 'who__name', text: a.name + (isGuest ? ' (게스트)' : where === 'practice' ? ' (연습)' : '') });
+    var subText = isGuest ? a.by + ' 님이 등록' : a.staff ? a.staff + ' 님이 운영진 권한으로 등록' : '';
+    var who = h('div', { class: 'who' }, h('div', null, nameEl, subText ? h('span', { class: 'who__sub', text: subText }) : null),
+      d.contactsOpen && !isGuest ? h('small', { text: '연락처 확인 중…' }) : null);
+    var boxes = [], body = h('div', null, who);
     if (ev.canMark) {
-      if (where === 'waiting') options.push(a.mark === '참석' ? { label: '나옴 표시 해제', value: '' } : { label: '대기였지만 나왔어요(대기참)', value: '참석' });
-      else options.push(a.mark === '노쇼' ? { label: '노쇼 표시 해제', value: '' } : { label: '노쇼로 표시', value: '노쇼', danger: true });
+      var mark = h('input', { type: 'checkbox', checked: where === 'waiting' ? a.mark === '참석' : a.mark === '노쇼' });
+      boxes.push(['mark', mark]);
+      body.appendChild(h('label', { class: 'pick' }, mark, h('span', { text: where === 'waiting' ? '대기였지만 나왔어요 (대기참)' : '안 나왔어요 (노쇼)' + (where === 'practice' ? ' · 연습도 노쇼비' : '') })));
+      if (!isGuest) {
+        var ft = h('input', { type: 'checkbox', checked: !!a.ft });
+        boxes.push(['ft', ft]);
+        body.appendChild(h('label', { class: 'pick' }, ft, h('span', { text: '🥤 자유투 꼴찌 (음료수 당번)' })));
+      }
     }
-    if (ev.canMark && a.kind !== '게스트') options.push(a.ft ? { label: '🥤 자유투 꼴찌 해제', value: 'ft-clear' } : { label: '🥤 자유투 꼴찌로 표시', value: 'ft' });
-    if (S.data.me.isStaff) options.push({ label: '신청 취소 처리 (운영진 권한)', value: 'remove' });
-    if (!options.length) return;
-    choose({ title: who, text: dayLabel(ev.date) + '\n' + ev.title + (a.staff ? '\n' + a.staff + ' 님이 운영진 권한으로 등록' : '')
-        + (ev.started && where === 'practice' ? '\n연습도 안 나오면 노쇼비가 부과돼요.' : ''), options: options })
-      .then(function (v) {
-        if (v === null) return;
-        var key = keyOf(ev, a);
-        if (v === 'ft' || v === 'ft-clear') { var fk = keyOf(ev, a); if (v === 'ft-clear') fk.clear = true; staffCall('freethrow', fk, v === 'ft' ? a.name + ' 님을 자유투 꼴찌로 표시했어요' : '자유투 꼴찌를 해제했어요'); return; }
-        if (v !== 'remove') { key.mark = v; staffCall('attendMark', key, v ? v === '노쇼' ? '노쇼로 표시했어요' : '나온 것으로 표시했어요' : '표시를 해제했어요'); return; }
-        ask({ title: who + '의 신청을 취소 처리할까요?', ok: '취소 처리', danger: true,
+    if (staff) {
+      body.appendChild(h('p', { class: 'fine', style: 'margin:10px 0 0' }, h('button', { class: 'linkbtn', type: 'button', text: '신청 취소 처리 (운영진 권한)', onclick: function () {
+        var open = body.closest('.veil'); if (open) open.remove();          // 이 창을 닫고 확인 창을 연다
+        ask({ title: a.name + ' 님의 신청을 취소 처리할까요?', ok: '취소 처리', danger: true,
           text: '운영진 권한으로 처리하며, 마감(당일 0시) 뒤에도 할 수 있어요. 누가 처리했는지 기록에 남습니다. 확정 자리가 비면 대기 1번이 자동으로 올라와요.' })
-          .then(function (yes) { if (yes) staffCall('staffRemove', key, '운영진 권한으로 취소 처리했어요'); });
+          .then(function (yes) { if (yes) staffCall('staffRemove', keyOf(ev, a), '운영진 권한으로 취소 처리했어요'); });
+      } })));
+    }
+    // 연락처는 창을 연 뒤에 받아 와 채운다(누른 순간에만 전달되고 조회 기록이 남는다)
+    if (d.contactsOpen && !isGuest) {
+      call('contactOne', keyOf(ev, a)).then(function (c) {
+        var slot = who.lastChild;
+        if (!slot || slot.tagName !== 'SMALL') return;
+        if (c.year) nameEl.textContent = nameEl.textContent.replace(a.name, a.name + '(' + c.year + ')');
+        who.replaceChild(c.phone ? h('a', { href: 'tel:' + c.phone.replace(/[^0-9+]/g, ''), target: '_top', text: c.phone, 'aria-label': a.name + ' 전화 걸기 ' + c.phone }) : h('small', { text: '연락처 없음' }), slot);
+      }, function () { var slot = who.lastChild; if (slot && slot.tagName === 'SMALL') slot.textContent = '연락처를 불러오지 못했어요'; });
+    }
+    ask({ title: dayLabel(ev.date) + '  ' + ev.title, body: body, ok: boxes.length ? '저장' : false, cancel: boxes.length ? '취소' : '닫기',
+      text: boxes.length ? (ev.locked ? '출결이 확정된 모임이에요. 운영진 권한으로 고칩니다.' : '저장한 뒤에도 다시 열어 고칠 수 있어요.') : '' })
+      .then(function (yes) {
+        if (!yes || !boxes.length) return;
+        var key = keyOf(ev, a), changed = false;
+        key.mark = a.mark || '';
+        boxes.forEach(function (x) {
+          if (x[0] === 'mark') { var v = x[1].checked ? (where === 'waiting' ? '참석' : '노쇼') : ''; if (v !== (a.mark || '')) { key.mark = v; changed = true; } }
+          if (x[0] === 'ft' && x[1].checked !== !!a.ft) { key.freethrow = x[1].checked; changed = true; }
+        });
+        if (!changed) return;
+        staffCall('attendMark', key, a.name + ' 님 표시를 저장했어요');
       });
   }
 

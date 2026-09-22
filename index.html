@@ -68,6 +68,17 @@
   .leaf--sat .leaf__num, .leaf--sat .leaf__dow { color: var(--sat); }
   .leaf--sun .leaf__month { background: var(--sun); color: #fff; }
   .leaf__rel { border-top: 1px solid var(--line); font-size: 12px; font-weight: 800; line-height: 22px; }
+  .leaf__ft { border-top: 1px solid var(--line); padding: 4px 3px 5px; font-size: 11px; line-height: 1.25; color: var(--ink-2); }
+  .leaf__ft b { display: block; font-size: 12px; color: var(--ink); word-break: keep-all; }
+  .leaf__ft i { display: block; margin-top: 1px; font: 700 12px/1 var(--num); font-style: normal; color: var(--sun); }
+  .tagx--ft { color: #8a5a00; border-color: #e0a800; }
+  .rank { list-style: none; margin: 0; padding: 0; }
+  .rank li { display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-top: 1px solid var(--line); font-size: 15px; }
+  .rank li:first-child { border-top: 0; }
+  .rank .no { width: 22px; font: 700 15px/1 var(--num); color: var(--ink-2); }
+  .rank b { flex: 1; font-weight: 700; }
+  .rank i { font: 700 18px/1 var(--num); font-style: normal; color: var(--sun); }
+  .rank li.is-top b, .rank li.is-top i { color: var(--sun); }
   .leaf--stamped { margin-bottom: 22px; }
   .leaf--stamped .leaf__rel { text-align: left; padding-left: 8px; }   /* 도장이 글자를 가리지 않게 */
   .stamp { position: absolute; right: -14px; bottom: -20px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--sun); box-shadow: inset 0 0 0 2px var(--paper), inset 0 0 0 3px var(--sun); background: var(--paper); color: var(--sun); font-size: 11px; font-weight: 800; line-height: 1.15; transform: rotate(-14deg); }
@@ -698,7 +709,10 @@
           h('div', { class: 'leaf__num', text: String(p.d) }),
           h('div', { class: 'leaf__dow', text: DOW[p.dow] + '요일' }),
           rel ? h('div', { class: 'leaf__rel', text: rel }) : null,
-          isToday && !done ? h('div', { class: 'stamp' }, d.sameDayApply ? '취소' : '신청', h('br'), '마감') : null),
+          isToday && !done ? h('div', { class: 'stamp' }, d.sameDayApply ? '취소' : '신청', h('br'), '마감') : null,
+          byDate[date].filter(function (e) { return e.freethrow; }).map(function (e) {        // 자유투 꼴찌(음료수 당번): 이름과 이달 횟수
+            return h('div', { class: 'leaf__ft', title: '자유투 꼴찌' }, '🥤 꼴찌', h('b', { text: e.freethrow.name }), h('i', { text: '이달 ' + e.freethrow.count + '회' }));
+          })),
         h('div', { class: 'day__events' }, bdayNote, byDate[date].map(function (ev) { return eventBlock(ev, d); }))));
     });
     out.push(d.hasFuture
@@ -739,6 +753,7 @@
       if (a.staff) parts.push(h('span', { class: 'tagx tagx--staff', text: '운영진 등록' }));
       if (a.mark === '노쇼') parts.push(h('span', { class: 'tagx tagx--no', text: '노쇼' }));
       if (a.mark === '참석' && where === 'waiting') parts.push(h('span', { class: 'tagx tagx--came', text: '나옴' }));
+      if (a.ft) parts.push(h('span', { class: 'tagx tagx--ft', text: '🥤 꼴찌' }));
       ul.appendChild(h('li', { class: (a.me ? 'is-me' : '') + (a.bday ? ' is-bday' : '') || null },
         (d.me.isStaff || ev.canMark) ? h('button', { type: 'button', 'aria-label': a.name + (d.me.isStaff ? ' 운영진 메뉴' : ' 출결 표시'), onclick: function () { entryMenu(ev, a, where); } }, parts)
                      : h('span', null, parts),
@@ -756,6 +771,23 @@
     p.setAttribute('d', 'M6.6 2.5c.4 0 .8.3.9.7l.9 3.1c.1.4 0 .8-.3 1L6.7 8.6c.9 1.9 2.4 3.4 4.3 4.3l1.3-1.4c.3-.3.7-.4 1-.3l3.1.9c.4.1.7.5.7.9v3c0 .6-.5 1-1 1C8.9 17 3 11.1 3 3.5c0-.6.4-1 1-1h2.6z');
     svg.appendChild(p);
     return svg;
+  }
+
+  /** 자유투 꼴찌(음료수 당번) 월간 순위 */
+  function showRank(ev) {
+    if (document.body.classList.contains('is-busy')) return;
+    setBusy(true);
+    call('freethrowRank', { month: ev.date.slice(0, 7) }).then(function (r) {
+      setBusy(false);
+      var mm = Number(r.month.slice(5, 7));
+      var top = r.ranks.length ? r.ranks[0].count : 0;
+      var list = h('ol', { class: 'rank' }, r.ranks.map(function (x, i) {
+        return h('li', { class: x.count === top ? 'is-top' : null }, h('span', { class: 'no', text: String(i + 1) }), h('b', { text: x.name }), h('i', { text: x.count + '회' }));
+      }));
+      ask({ title: '🥤 ' + mm + '월 자유투 꼴찌 순위', ok: false, cancel: '닫기',
+        text: r.ranks.length ? '이달 자유투에서 꼴찌를 한 횟수예요. 가장 많은 사람이 위에 와요.' : mm + '월에는 아직 꼴찌 기록이 없어요.',
+        body: r.ranks.length ? list : null });
+    }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
   }
 
   /** 조퇴·동행 같은 특이사항을 남기는 댓글. */
@@ -798,11 +830,12 @@
   /** 모임 카드 아래 버튼 줄: 운영진 도구(추가 등록 / 노쇼 체크)와 연락처(볼 수 있는 사람에게만) */
   function staffTools(ev) {
     var d = S.data, staff = d.me.isStaff;
-    if (!staff && !d.contactsOpen && !ev.canMark) return null;
+
     return h('div', { class: 'tools' },
       ev.canMark ? h('button', { class: 'linkbtn', type: 'button', text: '노쇼 체크', onclick: function () { noShowCheck(ev); } }) : null,
       staff && ev.started ? h('button', { class: 'linkbtn', type: 'button', text: ev.locked ? '운영진: 출결 확정 해제' : '운영진: 출결 확정', onclick: function () { confirmAttend(ev); } }) : null,
       staff ? h('button', { class: 'linkbtn', type: 'button', text: '운영진: 추가 등록', onclick: function () { staffAdd(ev); } }) : null,
+      h('button', { class: 'linkbtn', type: 'button', text: '🥤 이달 꼴찌 순위', onclick: function () { showRank(ev); } }),
       d.contactsOpen ? h('button', { class: 'linkbtn', type: 'button', 'aria-label': '참석 신청 회원 연락처', onclick: function () { showContacts(ev); } }, phoneIcon(), '연락처') : null);
   }
 
@@ -959,6 +992,7 @@
       if (where === 'waiting') options.push(a.mark === '참석' ? { label: '나옴 표시 해제', value: '' } : { label: '대기였지만 나왔어요(대기참)', value: '참석' });
       else options.push(a.mark === '노쇼' ? { label: '노쇼 표시 해제', value: '' } : { label: '노쇼로 표시', value: '노쇼', danger: true });
     }
+    if (ev.canMark && a.kind !== '게스트') options.push(a.ft ? { label: '🥤 자유투 꼴찌 해제', value: 'ft-clear' } : { label: '🥤 자유투 꼴찌로 표시', value: 'ft' });
     if (S.data.me.isStaff) options.push({ label: '신청 취소 처리 (운영진 권한)', value: 'remove' });
     if (!options.length) return;
     choose({ title: who, text: dayLabel(ev.date) + '\n' + ev.title + (a.staff ? '\n' + a.staff + ' 님이 운영진 권한으로 등록' : '')
@@ -966,6 +1000,7 @@
       .then(function (v) {
         if (v === null) return;
         var key = keyOf(ev, a);
+        if (v === 'ft' || v === 'ft-clear') { var fk = keyOf(ev, a); if (v === 'ft-clear') fk.clear = true; staffCall('freethrow', fk, v === 'ft' ? a.name + ' 님을 자유투 꼴찌로 표시했어요' : '자유투 꼴찌를 해제했어요'); return; }
         if (v !== 'remove') { key.mark = v; staffCall('attendMark', key, v ? v === '노쇼' ? '노쇼로 표시했어요' : '나온 것으로 표시했어요' : '표시를 해제했어요'); return; }
         ask({ title: who + '의 신청을 취소 처리할까요?', ok: '취소 처리', danger: true,
           text: '운영진 권한으로 처리하며, 마감(당일 0시) 뒤에도 할 수 있어요. 누가 처리했는지 기록에 남습니다. 확정 자리가 비면 대기 1번이 자동으로 올라와요.' })
@@ -1015,17 +1050,32 @@
           a.kind === '게스트' ? h('small', { text: '  게스트, ' + a.by + ' 등록' }) : null, a.late ? h('small', { text: '  급참' }) : null));
       });
     }
+    // 자유투 꼴찌(음료수 당번): 회원 한 명을 고른다
+    var ftRadios = [], ftName = 'ft-' + ev.id;
+    function ftRow(a, label) {
+      var r = h('input', { type: 'radio', name: ftName, checked: !!a && !!a.ft });
+      ftRadios.push({ a: a, box: r });
+      return h('label', { class: 'pick' }, r, h('span', { text: label }));
+    }
+    var players = (ev.confirmed || []).concat(ev.waiting || [], ev.practice || []).filter(function (a) { return a.kind !== '게스트'; });
+    var ftBody = players.length ? [h('p', { class: 'pickhead' }, '🥤 자유투 꼴찌 ', h('small', { text: '음료수 당번 한 명' })), ftRow(null, '없음')]
+      .concat(players.map(function (a) { return ftRow(a, a.name); })) : null;
+    if (ftBody && !players.some(function (a) { return a.ft; })) ftRadios[0].box.checked = true;
     var body = h('div', null,
       (ev.confirmed || []).length ? h('p', { class: 'pickhead' }, '참석 확정 ', h('small', { text: '안 나온 사람을 체크' })) : null, rows(ev.confirmed, 'confirmed'),
       (ev.practice || []).length ? h('p', { class: 'pickhead' }, '연습 ', h('small', { text: '안 나온 사람을 체크 (노쇼비 부과)' })) : null, rows(ev.practice, 'practice'),
-      (ev.waiting || []).length ? h('p', { class: 'pickhead' }, '대기 ', h('small', { text: '실제로 나온 사람을 체크 (대기참)' })) : null, rows(ev.waiting, 'waiting'));
+      (ev.waiting || []).length ? h('p', { class: 'pickhead' }, '대기 ', h('small', { text: '실제로 나온 사람을 체크 (대기참)' })) : null, rows(ev.waiting, 'waiting'),
+      ftBody);
     if (!picks.length) { toast('명단이 비어 있어요.'); return; }
     ask({ title: '노쇼 체크', text: dayLabel(ev.date) + '  ' + ev.title + '\n체크하지 않은 확정자는 나온 것으로 정산돼요. 저장한 뒤에도 다시 열어 고칠 수 있어요.', body: body, ok: '저장' })
       .then(function (yes) {
         if (!yes) return;
-        var noshow = [], came = [];
+        var noshow = [], came = [], ft = null;
         picks.forEach(function (p) { if (p.box.checked) (p.where === 'waiting' ? came : noshow).push(keyOf(ev, p.a)); });
-        staffCall('attendCheck', { eventId: ev.id, noshow: noshow, came: came }, '노쇼 ' + noshow.length + '명' + (came.length ? ', 대기참 ' + came.length + '명' : '') + '으로 저장했어요');
+        ftRadios.forEach(function (p) { if (p.box.checked && p.a) ft = keyOf(ev, p.a); });
+        var payload = { eventId: ev.id, noshow: noshow, came: came };
+        if (ftRadios.length) payload.freethrow = ft;                        // 없음을 고르면 null(해제)
+        staffCall('attendCheck', payload, '노쇼 ' + noshow.length + '명' + (came.length ? ', 대기참 ' + came.length + '명' : '') + (ft ? ', 꼴찌 1명' : '') + '으로 저장했어요');
       });
   }
 

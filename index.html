@@ -779,9 +779,9 @@
             return h('button', { class: 'leaf__mvp' + (e.mvp.mine ? '' : ' leaf__mvp--todo'), type: 'button', 'aria-label': 'MVP 투표: ' + e.title, onclick: function () { openMvp(e); } },
               '🏆 MVP', h('b', { text: e.mvp.mine ? '내 표: ' + e.mvp.mine : '투표하기' }), e.mvp.total ? h('i', { text: e.mvp.total + '표' }) : null);
           }),
-          byDate[date].filter(function (e) { return e.freethrow; }).map(function (e) {        // 자유투 꼴찌(음료수 당번): 이름과 이달 횟수
-            return h('button', { class: 'leaf__ft', type: 'button', 'aria-label': '자유투 꼴찌 ' + e.freethrow.name + ', 이달 순위 보기', onclick: function () { showRank(e); } },
-              '🥤 꼴찌', h('b', { text: e.freethrow.name }), h('i', { text: '이달 ' + e.freethrow.count + '회' }));
+          byDate[date].filter(function (e) { return e.freethrow && e.freethrow.length; }).map(function (e) {   // 자유투 꼴찌(최대 3명): 이름과 이달 횟수
+            return h('button', { class: 'leaf__ft', type: 'button', 'aria-label': '자유투 꼴찌 ' + e.freethrow.map(function (f) { return f.name; }).join(', ') + ', 이달 순위 보기', onclick: function () { showRank(e); } },
+              '🥤 꼴찌', e.freethrow.map(function (f) { return [h('b', { text: f.name }), h('i', { text: '이달 ' + f.count + '회' })]; }));
           })),
         h('div', { class: 'day__events' }, bdayNote, byDate[date].map(function (ev) { return eventBlock(ev, d); }))));
     });
@@ -1075,16 +1075,26 @@
     var subText = isGuest ? a.by + ' 님이 등록' : a.staff ? a.staff + ' 님이 운영진 권한으로 등록' : '';
     var who = h('div', { class: 'who' }, h('div', null, nameEl, subText ? h('span', { class: 'who__sub', text: subText }) : null),
       d.contactsOpen && !isGuest ? h('small', { text: '연락처 확인 중…' }) : null);
-    var boxes = [], body = h('div', null, who);
+    var boxes = [], body = h('div', null, who), mark = null;
     if (ev.canMark) {
-      var mark = h('input', { type: 'checkbox', checked: where === 'waiting' ? a.mark === '참석' : a.mark === '노쇼' });
+      mark = h('input', { type: 'checkbox', checked: where === 'waiting' ? a.mark === '참석' : a.mark === '노쇼' });
       boxes.push(['mark', mark]);
       body.appendChild(h('label', { class: 'pick' }, mark, h('span', { text: where === 'waiting' ? '대기였지만 나왔어요 (대기참)' : '안 나왔어요 (노쇼)' + (where === 'practice' ? ' · 연습도 노쇼비' : '') })));
       if (!isGuest) {
-        var ft = h('input', { type: 'checkbox', checked: !!a.ft });
+        var ftCount = (ev.freethrow || []).length;
+        var ft = h('input', { type: 'checkbox', checked: !!a.ft, disabled: !a.ft && ftCount >= 3 });
         boxes.push(['ft', ft]);
-        body.appendChild(h('label', { class: 'pick' }, ft, h('span', { text: '🥤 자유투 꼴찌 (음료수 당번)' })));
+        body.appendChild(h('label', { class: 'pick' }, ft, h('span', { text: '🥤 자유투 꼴찌 (음료수 당번)' + (!a.ft && ftCount >= 3 ? ' · 이미 3명' : ftCount ? ' · 지금 ' + ftCount + '명' : '') })));
       }
+    }
+    if (a.mvpOk) {                                                          // 나온 사람이면 이름 창에서도 MVP 투표(자기 자신 제외)
+      var mine = ev.mvp && ev.mvp.mine;
+      var mv = h('input', { type: 'checkbox', checked: !!a.myVote });
+      boxes.push(['mvp', mv]);
+      body.appendChild(h('label', { class: 'pick' }, mv, h('span', { text: '🏆 MVP로 투표' + (mine && !a.myVote ? ' (지금 내 표: ' + mine + ' → 바뀜)' : '') })));
+      if (mark && where !== 'waiting') mark.addEventListener('change', function () {   // 노쇼로 표시하면 MVP 후보가 아니다
+        if (mark.checked) { mv.checked = false; mv.disabled = true; } else mv.disabled = false;
+      });
     }
     if (staff) {
       body.appendChild(h('p', { class: 'fine', style: 'margin:10px 0 0' }, h('button', { class: 'linkbtn', type: 'button', text: '신청 취소 처리 (운영진 권한)', onclick: function () {
@@ -1133,6 +1143,7 @@
         boxes.forEach(function (x) {
           if (x[0] === 'mark') { var v = x[1].checked ? (where === 'waiting' ? '참석' : '노쇼') : ''; if (v !== (a.mark || '')) { key.mark = v; changed = true; } }
           if (x[0] === 'ft' && x[1].checked !== !!a.ft) { key.freethrow = x[1].checked; changed = true; }
+          if (x[0] === 'mvp' && x[1].checked !== !!a.myVote) { key.mvp = x[1].checked; changed = true; }
         });
         if (!changed) return;
         staffCall('attendMark', key, a.name + ' 님 표시를 저장했어요');
@@ -1173,7 +1184,7 @@
       ask({ title: '이대로 출결을 확정할까요?', ok: '출결 확정',
         text: dayLabel(ev.date) + '  ' + ev.title + '\n노쇼 ' + noshow.length + '명' + (noshow.length ? ': ' + noshow.join(', ') : '') + '\n대기참 ' + came.length + '명' + (came.length ? ': ' + came.join(', ') : '')
           + '\n🏆 MVP: ' + mvpLine + (tally.length > 1 ? ' · 다음 ' + tally.slice(1, 4).map(function (t) { return t.name + ' ' + t.votes + '표'; }).join(', ') : '')
-          + '\n🥤 자유투 꼴찌: ' + (ev.freethrow ? ev.freethrow.name : '없음')
+          + '\n🥤 자유투 꼴찌: ' + (ev.freethrow && ev.freethrow.length ? ev.freethrow.map(function (f) { return f.name; }).join(', ') : '없음')
           + '\n\n확정하면 MVP와 꼴찌가 함께 기록되고, 회원들은 더 고칠 수 없어요.' })
         .then(function (yes) { if (yes) staffCall('attendConfirm', { eventId: ev.id }, '출결을 확정했어요'); });
     }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
@@ -1190,17 +1201,22 @@
           a.kind === '게스트' ? h('small', { text: '  게스트, ' + a.by + ' 등록' }) : null, a.late ? h('small', { text: '  급참' }) : null));
       });
     }
-    // 자유투 꼴찌(음료수 당번): 회원 한 명을 고른다
-    var ftRadios = [], ftName = 'ft-' + ev.id;
-    function ftRow(a, label) {
-      var r = h('input', { type: 'radio', name: ftName, checked: !!a && !!a.ft });
-      ftRadios.push({ a: a, box: r });
-      return h('label', { class: 'pick' }, r, h('span', { text: label }));
+    // 자유투 꼴찌(음료수 당번): 회원 중 최대 3명
+    var ftBoxes = [];
+    var limitFt = function () {
+      var n = ftBoxes.filter(function (x) { return x.box.checked; }).length;
+      ftBoxes.forEach(function (x) { x.box.disabled = !x.box.checked && n >= 3; });
+    };
+    function ftRow(a) {
+      var c = h('input', { type: 'checkbox', checked: !!a.ft });
+      c.addEventListener('change', limitFt);
+      ftBoxes.push({ a: a, box: c });
+      return h('label', { class: 'pick' }, c, h('span', { text: a.name }));
     }
     var players = (ev.confirmed || []).concat(ev.waiting || [], ev.practice || []).filter(function (a) { return a.kind !== '게스트'; });
-    var ftBody = players.length ? [h('p', { class: 'pickhead' }, '🥤 자유투 꼴찌 ', h('small', { text: '음료수 당번 한 명' })), ftRow(null, '없음')]
-      .concat(players.map(function (a) { return ftRow(a, a.name); })) : null;
-    if (ftBody && !players.some(function (a) { return a.ft; })) ftRadios[0].box.checked = true;
+    var ftBody = players.length ? [h('p', { class: 'pickhead' }, '🥤 자유투 꼴찌 ', h('small', { text: '음료수 당번, 최대 3명' }))]
+      .concat(players.map(ftRow)) : null;
+    limitFt();
     var body = h('div', null,
       (ev.confirmed || []).length ? h('p', { class: 'pickhead' }, '참석 확정 ', h('small', { text: '안 나온 사람을 체크' })) : null, rows(ev.confirmed, 'confirmed'),
       (ev.practice || []).length ? h('p', { class: 'pickhead' }, '연습 ', h('small', { text: '안 나온 사람을 체크 (노쇼비 부과)' })) : null, rows(ev.practice, 'practice'),
@@ -1210,12 +1226,12 @@
     ask({ title: '노쇼 체크', text: dayLabel(ev.date) + '  ' + ev.title + '\n체크하지 않은 확정자는 나온 것으로 정산돼요. 저장한 뒤에도 다시 열어 고칠 수 있어요.', body: body, ok: '저장' })
       .then(function (yes) {
         if (!yes) return;
-        var noshow = [], came = [], ft = null;
+        var noshow = [], came = [], ft = [];
         picks.forEach(function (p) { if (p.box.checked) (p.where === 'waiting' ? came : noshow).push(keyOf(ev, p.a)); });
-        ftRadios.forEach(function (p) { if (p.box.checked && p.a) ft = keyOf(ev, p.a); });
+        ftBoxes.forEach(function (p) { if (p.box.checked) ft.push(keyOf(ev, p.a)); });
         var payload = { eventId: ev.id, noshow: noshow, came: came };
-        if (ftRadios.length) payload.freethrow = ft;                        // 없음을 고르면 null(해제)
-        staffCall('attendCheck', payload, '노쇼 ' + noshow.length + '명' + (came.length ? ', 대기참 ' + came.length + '명' : '') + (ft ? ', 꼴찌 1명' : '') + '으로 저장했어요');
+        if (ftBoxes.length) payload.freethrow = ft;                          // 아무도 안 고르면 빈 배열(해제)
+        staffCall('attendCheck', payload, '노쇼 ' + noshow.length + '명' + (came.length ? ', 대기참 ' + came.length + '명' : '') + (ft.length ? ', 꼴찌 ' + ft.length + '명' : '') + '으로 저장했어요');
       });
   }
 

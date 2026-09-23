@@ -89,6 +89,17 @@
   .day__events { flex: 1; min-width: 0; }
   .ev + .ev { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
   .ev h2 { margin: 0; font-size: 18px; line-height: 1.35; font-weight: 800; }
+  .ev__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .ev__head h2 { flex: 1; min-width: 0; }
+  .mine { flex: none; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 14px; font-weight: 800; color: var(--go); white-space: nowrap; }
+  .mine svg { flex: none; width: 18px; height: 18px; }
+  .mine--wait { color: var(--sat); }
+  .mine--new { animation: press .22s ease-out; }
+  .ev__count .status { font-weight: 800; color: var(--ink-2); }
+  .ev__count .status--warn { color: #8a5a00; }
+  .ev__count .status--ok { color: var(--go); }
+  .ev__count .status small { font-weight: 400; color: var(--ink-2); margin-left: 4px; }
+  .hint { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); }
   .ev__time { font: 700 21px/1 var(--num); margin-right: 7px; letter-spacing: 0.01em; }
   .ev__sub { margin: 3px 0 0; font-size: 14px; color: var(--ink-2); }
   .ev__count { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 10px 0 0; font-size: 14px; color: var(--ink-2); }
@@ -883,14 +894,33 @@
   }
 
   function eventBlock(ev, d) {
+    // 내 상태: 제목 오른쪽에 체크 아이콘 + 짧은 글씨 (버튼·배지 아님)
+    var mine = null;
+    if (ev.my) {
+      var mineText = ev.my.kind === '연습' ? '연습' : ev.my.waiting ? '대기 ' + ev.my.no + '번' : '참석 확정';
+      if (ev.my.late && !ev.my.waiting) mineText += ' · 급참';
+      mine = h('span', { class: 'mine' + (ev.my.waiting ? ' mine--wait' : '') + (S.justApplied === ev.id ? ' mine--new' : ''), 'aria-label': '내 상태: ' + mineText },
+        ev.my.waiting ? waitIcon() : checkIcon(), mineText);
+    }
+    // 모임 상태: 인원 줄 끝에 작은 글씨. 신청 받는 중이면 아무것도 없다
+    var status = null;
+    if (ev.locked) status = h('span', { class: 'status status--ok' }, '출결 확정', d.me.isStaff ? h('small', { text: ev.locked }) : null);
+    else if (ev.started && ev.canMark) status = h('span', { class: 'status status--warn', text: '노쇼 체크 중' });
+    else if (ev.started) status = h('span', { class: 'status', text: '노쇼 체크 중' });
+    else if (ev.isPast) status = h('span', { class: 'status', text: '지난 모임' });
+    else if (!ev.open) status = h('span', { class: 'status', text: '신청 마감' });
+    else if (ev.isToday) status = h('span', { class: 'status', text: '급참 접수 중' });
+    else if (ev.full) status = h('span', { class: 'status', text: '대기 접수' });
+
     var el = h('article', { class: 'ev' },
-      h('h2', null, ev.time ? h('span', { class: 'ev__time', text: ev.time }) : null, ev.title),
+      h('div', { class: 'ev__head' }, h('h2', null, ev.time ? h('span', { class: 'ev__time', text: ev.time }) : null, ev.title), mine),
       ev.place ? h('p', { class: 'ev__sub', text: ev.place }) : null,
       ev.memo ? h('p', { class: 'ev__sub', text: ev.memo }) : null,
       h('p', { class: 'ev__count' },
         h('span', null, '참석 ', h('b', { text: String(ev.confirmedCount) }), '명', ev.capacity ? ' / 정원 ' + ev.capacity + '명' : ''),
         ev.waitCount ? h('span', null, '대기 ', h('b', { text: String(ev.waitCount) }), '명') : null,
-        ev.practiceCount ? h('span', null, '연습 ', h('b', { text: String(ev.practiceCount) }), '명') : null));
+        ev.practiceCount ? h('span', null, '연습 ', h('b', { text: String(ev.practiceCount) }), '명') : null,
+        status));
 
     add(el, group('참석 확정', ev.confirmed, 'confirmed', ev, d));
     add(el, group('대기', ev.waiting, 'waiting', ev, d));
@@ -899,23 +929,19 @@
     var box = h('div', { class: 'act' });
     if (ev.my) {
       var practice = ev.my.kind === '연습';
-      var label = (practice ? '연습으로 신청했어요' : ev.my.waiting ? '대기 ' + ev.my.no + '번이에요' : '참석 확정이에요') + (ev.my.late ? ' (급참)' : '');
-      box.appendChild(h('div', { class: 'done' + (ev.my.waiting ? ' done--wait' : '') + (S.justApplied === ev.id ? ' done--new' : '') },
-        ev.my.waiting ? waitIcon() : checkIcon(), label));
-      if (ev.my.waiting) box.appendChild(h('p', { class: 'note', text: '앞에서 취소가 나오면 순서대로 참석 확정이 돼요. 대기 중에는 언제든 취소할 수 있어요.' }));
+      if (ev.my.waiting) box.appendChild(h('p', { class: 'hint', style: 'margin:0 0 8px', text: '앞에서 취소가 나오면 순서대로 확정돼요' }));
       if (ev.my.canCancel) {
-        box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', text: practice ? '연습 취소' : '신청 취소', onclick: function () { cancel(ev); } }));
-        if (ev.date === d.tomorrow && !ev.my.waiting) box.appendChild(h('p', { class: 'note note--warn', text: '오늘 밤 12시가 지나면 취소할 수 없어요.' }));
-      } else {
-        box.appendChild(h('p', { class: 'note', text: '모임 당일이라 취소할 수 없어요. 사정이 생기면 운영진에게 알려 주세요.' }));
+        // 제약은 버튼 안에: 전날이면 "오늘 밤 12시까지"
+        var cancelLabel = (practice ? '연습 취소' : '신청 취소') + (ev.date === d.tomorrow && !ev.my.waiting ? ' · 오늘 밤 12시까지' : '');
+        box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', text: cancelLabel, onclick: function () { cancel(ev); } }));
       }
+      // 당일이라 취소할 수 없을 때는 버튼도 문구도 없다(날짜 칸의 "취소 마감" 도장이 알려 준다)
     } else if (ev.open) {
-      box.appendChild(h('button', { class: 'btn', type: 'button', text: ev.full ? '대기로 신청하기' : ev.isToday ? '급참 신청하기' : '신청하기', onclick: function () { apply(ev, '참석'); } }));
-      if (ev.full) box.appendChild(h('p', { class: 'note', text: '정원이 차서 대기 ' + (ev.waitCount + 1) + '번으로 신청돼요. 앞에서 취소가 나오면 순서대로 참석 확정이 됩니다.' + (ev.isToday ? ' 오늘 신청은 급참으로 기록돼요.' : '') }));
-      else if (ev.isToday) box.appendChild(h('p', { class: 'note note--warn', text: '오늘 0시가 지나 급참이에요. 급참비 ' + won(d.lateFee) + '이 추가되고 취소할 수 없어요. (' + d.lateClose + ' 마감)' }));
-    } else {
-      box.appendChild(h('p', { class: 'note', text: ev.isToday ? '오늘 모임 신청은 마감됐어요.' : '신청이 마감됐어요.' }));
+      var applyLabel = ev.full ? '대기 ' + (ev.waitCount + 1) + '번으로 신청' : ev.isToday ? '급참 신청 · +' + won(d.lateFee) : '신청하기';
+      box.appendChild(h('button', { class: 'btn', type: 'button', text: applyLabel, onclick: function () { apply(ev, '참석'); } }));
+      if (ev.isToday) box.appendChild(h('p', { class: 'hint', text: '급참은 취소할 수 없어요' }));
     }
+    // 마감 뒤에는 버튼이 없다(인원 줄의 "신청 마감"이 알려 준다)
 
     if (ev.open && (!ev.my || ev.canGuest)) {
       box.appendChild(h('div', { class: 'pair' },
@@ -926,14 +952,11 @@
     (ev.myGuests || []).forEach(function (g) {
       box.appendChild(h('div', { class: 'guest' },
         h('div', { class: 'guest__who' }, '게스트 ' + g.name,
-          h('small', { text: (g.waiting ? '대기 ' + g.no + '번' : '참석 확정') + (g.canCancel ? '' : ', 당일이라 취소할 수 없어요') })),
+          h('small', { text: g.waiting ? '대기 ' + g.no + '번' : '참석 확정' })),         // 취소 불가는 취소 링크가 없는 것으로 충분(날짜 칸의 도장이 이유를 알려 준다)
         g.canCancel ? h('button', { class: 'linkbtn', type: 'button', text: '취소', 'aria-label': '게스트 ' + g.name + ' 취소', onclick: function () { guestCancel(ev, g); } }) : null));
     });
     el.appendChild(box);
-    if (ev.started) {
-      el.appendChild(h('p', { class: 'note', text: ev.locked ? '출결 확정됨 (' + ev.locked + '). 고칠 내용은 운영진에게 알려 주세요.'
-        : ev.canMark ? '노쇼 체크 중이에요. 안 나온 사람이 있으면 [노쇼 체크]나 이름을 눌러 표시해 주세요. 운영진이 확정하면 마감됩니다.' : '운영진의 출결 확정을 기다리고 있어요.' }));
-    }
+    if (ev.started && ev.canMark && !ev.locked) el.appendChild(h('p', { class: 'hint', text: '이름을 눌러 노쇼·자유투 꼴찌를 표시할 수 있어요' }));
     add(el, staffTools(ev));
     if (ev.comments) el.appendChild(commentBox(ev));
     return el;

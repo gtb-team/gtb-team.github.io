@@ -790,7 +790,8 @@
                      : h('span', null, parts),
         a.bday ? h('i', { class: 'plus1', text: '+1', title: '생일 이벤트 +1', 'aria-label': '생일 이벤트 +1' }) : null));
     });
-    return h('div', { class: 'grp ' + cls }, h('h3', { text: title }), ul);          // 인원수는 위 인원 줄에 있으므로 여기서는 이름만
+    // 인원수는 위 인원 줄에 있으므로 묶음 제목에는 숫자를 붙이지 않고, 첫 묶음(참석 확정)은 제목 없이 바로 이름이 이어진다
+    return h('div', { class: 'grp ' + cls }, where === 'confirmed' ? null : h('h3', { text: title }), ul);
   }
 
   function phoneIcon() {

@@ -326,6 +326,7 @@
    * 보내는 곳을 껍데기 주소로 못 박아 두므로, 다른 사이트가 이 화면을 끼워 넣어도 로그인 정보를 받을 수 없다.
    */
   var VIA = BOOT.via === 'w' && !!BOOT.wrapperOrigin;
+  var selfUrl = '';                          // 내 주소에서 열린 경우 이 페이지의 주소(직접 링크 만들 때)
   function tellWrapper(type, extra) {
     if (!VIA) return;
     var msg = { gtb: 1, type: type };
@@ -1309,10 +1310,22 @@
   }
 
   /* ---------- 팀장전(팀장 픽) ---------- */
+  /** 직접 링크(?draft=날짜)로 들어온 경우: 목록이 준비되면 그날 팀장전을 바로 연다 */
+  function openDeepLink() {
+    var deep = session('gtb.deep');
+    if (!deep || S.view !== 'main' || !S.data || S.data.stage !== 'ready') return;
+    session('gtb.deep', '');
+    var m = /^draft=(\d{4}-\d{2}-\d{2})$/.exec(deep);
+    if (m) openDraft({ date: m[1] });
+  }
+
+  /** 팀장전 화면의 주소(카톡 방에 올리거나 다른 브라우저에서 열 때) */
+  function draftLink(date) { return (REMOTE ? selfUrl : (BOOT.appUrl || '')) + '?draft=' + date; }
+
   function openDraft(ev) {
     if (document.body.classList.contains('is-busy')) return;
     setBusy(true);
-    call('draftState', { eventId: ev.id }).then(function (r) {
+    call('draftState', ev.id ? { eventId: ev.id } : { date: ev.date }).then(function (r) {
       setBusy(false); S.draft = r; S.view = 'draft'; S.scroll = { mode: 'top' }; render(); startDraftPolling();
     }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
   }
@@ -1363,6 +1376,12 @@
     var panel = h('section', { class: 'panel' });
     root.appendChild(panel);
     var dot = function (t) { return h('span', { class: 'team__dot team__dot--' + t, 'aria-hidden': 'true' }); };
+    var link = draftLink(r.date);
+    if (link) {
+      root.appendChild(h('p', { class: 'fine', style: 'margin:8px 16px 0; word-break: break-all' },
+        '이 화면 주소: ', h('a', { href: link, text: link, target: '_top' }),
+        /KAKAOTALK/i.test(navigator.userAgent) ? [' · ', h('a', { href: 'kakaotalk://web/openExternal?url=' + encodeURIComponent(link), text: '다른 브라우저로 열기' })] : null));
+    }
 
     if (r.status === '없음') {
       panel.appendChild(h('p', { class: 'note', text: '참석 확정이 정원(' + r.capacity + '명)만큼 차면 팀장전을 시작할 수 있어요. 지금 ' + r.confirmedCount + '명이에요.' }));
@@ -1564,8 +1583,8 @@
     if (!S.token) { renderLogin(BOOT.error); return; }
     if (!BOOT.token) tellWrapper('token', { token: S.token });   // 이쪽 저장소에만 남아 있던 경우: 껍데기에도 맡긴다
     tellWrapper('ready');
-    if (BOOT.state && BOOT.token) { keepRange(BOOT.state); render(); }   // 서버가 첫 화면 내용을 함께 보내 준 경우
-    else load();
+    if (BOOT.state && BOOT.token) { keepRange(BOOT.state); render(); openDeepLink(); }   // 서버가 첫 화면 내용을 함께 보내 준 경우
+    else load().then(openDeepLink);
   }
 
   if (!REMOTE) { start(); return; }
@@ -1579,8 +1598,9 @@
   var q = {};
   window.location.search.replace(/[?&]([^=&#]+)=([^&#]*)/g, function (_, k, v) { q[k] = decodeURIComponent(v.replace(/\+/g, ' ')); });
   CAME_BACK = !!(q.code || q.error);
-  if (CAME_BACK && window.history && window.history.replaceState) window.history.replaceState(null, '', window.location.pathname);   // 주소창의 인가 코드는 바로 지운다
-  var selfUrl = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '/');
+  if (q.draft) session('gtb.deep', 'draft=' + q.draft);                          // 팀장전 직접 링크: 로그인을 거쳐 돌아와도 열리도록 기억해 둔다
+  if ((CAME_BACK || q.draft) && window.history && window.history.replaceState) window.history.replaceState(null, '', window.location.pathname);   // 주소창의 인가 코드·값은 바로 지운다
+  selfUrl = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '/');
 
   function boot() {
     var ask = { back: selfUrl };

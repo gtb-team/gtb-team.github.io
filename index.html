@@ -134,6 +134,11 @@
   .who a { flex: none; color: var(--sat); font: 700 20px/1 var(--num); text-decoration: none; }
   .who small { flex: none; color: var(--ink-2); }
   button.leaf__ft { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; font-family: inherit; cursor: pointer; }
+  .leaf__mvp { display: block; width: 100%; padding: 4px 3px 5px; border: 0; border-top: 1px solid var(--line); background: none; font-family: inherit; font-size: 11px; line-height: 1.25; color: var(--ink-2); text-align: center; }
+  .leaf__mvp b { display: block; font-size: 12px; color: var(--ink); word-break: keep-all; }
+  .leaf__mvp i { display: block; margin-top: 1px; font: 700 12px/1 var(--num); font-style: normal; color: var(--sun); }
+  button.leaf__mvp { cursor: pointer; }
+  button.leaf__mvp--todo b { color: var(--sat); }
   .leaf__draft { display: block; width: 100%; padding: 6px 3px 7px; border: 0; border-top: 1px solid var(--line); background: none; font: 800 11px/1.3 inherit; font-family: inherit; color: var(--ink); cursor: pointer; }
   .leaf__draft--live { color: #8a5a00; }
   .leaf__draft--done { color: var(--ink-2); }
@@ -768,6 +773,12 @@
             return h('button', { class: 'leaf__draft' + (e.draft === '진행' ? ' leaf__draft--live' : e.draft === '완료' ? ' leaf__draft--done' : ''), type: 'button', text: label,
               'aria-label': label + ': ' + e.title, onclick: function () { openDraft(e); } });
           }),
+          byDate[date].filter(function (e) { return e.mvp; }).map(function (e) {              // MVP: 확정 뒤엔 이름·표, 투표 중엔 투표 버튼
+            if (!e.mvp.open) return h('div', { class: 'leaf__mvp', title: 'MVP' }, '🏆 MVP', h('b', { text: e.mvp.name }), h('i', { text: e.mvp.votes + '표' }));
+            if (!e.mvp.canVote) return e.mvp.total ? h('div', { class: 'leaf__mvp' }, '🏆 MVP', h('b', { text: '투표 중' }), h('i', { text: e.mvp.total + '표' })) : null;
+            return h('button', { class: 'leaf__mvp' + (e.mvp.mine ? '' : ' leaf__mvp--todo'), type: 'button', 'aria-label': 'MVP 투표: ' + e.title, onclick: function () { openMvp(e); } },
+              '🏆 MVP', h('b', { text: e.mvp.mine ? '내 표: ' + e.mvp.mine : '투표하기' }), e.mvp.total ? h('i', { text: e.mvp.total + '표' }) : null);
+          }),
           byDate[date].filter(function (e) { return e.freethrow; }).map(function (e) {        // 자유투 꼴찌(음료수 당번): 이름과 이달 횟수
             return h('button', { class: 'leaf__ft', type: 'button', 'aria-label': '자유투 꼴찌 ' + e.freethrow.name + ', 이달 순위 보기', onclick: function () { showRank(e); } },
               '🥤 꼴찌', h('b', { text: e.freethrow.name }), h('i', { text: '이달 ' + e.freethrow.count + '회' }));
@@ -1153,10 +1164,19 @@
     }
     var noshow = (ev.confirmed || []).concat(ev.practice || []).filter(function (a) { return a.mark === '노쇼'; }).map(function (a) { return a.name; });
     var came = (ev.waiting || []).filter(function (a) { return a.mark === '참석'; }).map(function (a) { return a.name; });
-    ask({ title: '이대로 출결을 확정할까요?', ok: '출결 확정',
-      text: dayLabel(ev.date) + '  ' + ev.title + '\n노쇼 ' + noshow.length + '명' + (noshow.length ? ': ' + noshow.join(', ') : '') + '\n대기참 ' + came.length + '명' + (came.length ? ': ' + came.join(', ') : '')
-        + '\n\n확정하면 회원들은 더 고칠 수 없고 운영진만 고칠 수 있어요.' })
-      .then(function (yes) { if (yes) staffCall('attendConfirm', { eventId: ev.id }, '출결을 확정했어요'); });
+    if (document.body.classList.contains('is-busy')) return;
+    setBusy(true);
+    call('mvpState', { eventId: ev.id }).then(function (m) {                 // 확정과 함께 굳어질 MVP·꼴찌를 미리 보여 준다
+      setBusy(false);
+      var tally = m.tally || [];
+      var mvpLine = tally.length ? tally[0].name + ' (' + tally[0].votes + '표' + (tally.length > 1 && tally[1].votes === tally[0].votes ? ', 동률은 먼저 도달한 사람' : '') + ')' : '투표 없음';
+      ask({ title: '이대로 출결을 확정할까요?', ok: '출결 확정',
+        text: dayLabel(ev.date) + '  ' + ev.title + '\n노쇼 ' + noshow.length + '명' + (noshow.length ? ': ' + noshow.join(', ') : '') + '\n대기참 ' + came.length + '명' + (came.length ? ': ' + came.join(', ') : '')
+          + '\n🏆 MVP: ' + mvpLine + (tally.length > 1 ? ' · 다음 ' + tally.slice(1, 4).map(function (t) { return t.name + ' ' + t.votes + '표'; }).join(', ') : '')
+          + '\n🥤 자유투 꼴찌: ' + (ev.freethrow ? ev.freethrow.name : '없음')
+          + '\n\n확정하면 MVP와 꼴찌가 함께 기록되고, 회원들은 더 고칠 수 없어요.' })
+        .then(function (yes) { if (yes) staffCall('attendConfirm', { eventId: ev.id }, '출결을 확정했어요'); });
+    }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
   }
 
   /** 노쇼 체크: 안 나온 사람(확정·연습)과 대기였지만 나온 사람을 한 번에 고르고 저장한다. */
@@ -1308,6 +1328,41 @@
       h('div', { class: 'pair' },
         h('button', { class: 'btn btn--ghost', type: 'button', text: prev + ' 정산', onclick: function () { run(prev); } }),
         h('button', { class: 'btn btn--ghost', type: 'button', text: thisMonth + ' 정산', onclick: function () { run(thisMonth); } })));
+  }
+
+  /* ---------- MVP 투표 ---------- */
+  function openMvp(ev) {
+    if (document.body.classList.contains('is-busy')) return;
+    setBusy(true);
+    call('mvpState', { eventId: ev.id }).then(function (r) { setBusy(false); showMvp(r); },
+      function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
+  }
+  function showMvp(r) {
+    if (r.locked) {
+      ask({ title: '🏆 MVP', ok: false, cancel: '닫기', text: dayLabel(r.date) + '  ' + r.title + '\n' + (r.result ? r.result.name + ' 님 (' + r.result.votes + '표)' : '투표가 없어 MVP가 없어요.') });
+      return;
+    }
+    if (!r.canVote) { toast('이 모임에 나온 사람만 투표할 수 있어요.'); return; }
+    var name = 'mvp-' + r.eventId, radios = [];
+    var body = h('div', null,
+      h('p', { class: 'fine', style: 'margin:0 0 6px', text: '오늘 가장 잘한 한 명을 고르세요. 운영진이 출결을 확정할 때까지 바꿀 수 있어요.' }),
+      r.candidates.map(function (c) {
+        var rb = h('input', { type: 'radio', name: name, checked: r.mine === c.ref });
+        radios.push({ ref: c.ref, box: rb });
+        return h('label', { class: 'pick' }, rb, h('span', { text: c.name + (c.guest ? ' (게스트)' : '') }));
+      }),
+      r.mine ? h('p', { class: 'fine', style: 'margin:10px 0 0' }, h('button', { class: 'linkbtn', type: 'button', text: '내 표 거두기', onclick: function () {
+        var open = body.closest('.veil'); if (open) open.remove();
+        act('mvpVote', { eventId: r.eventId, ref: '' }, '표를 거뒀어요');
+      } })) : null);
+    ask({ title: '🏆 MVP 투표', text: dayLabel(r.date) + '  ' + r.title, body: body, ok: '투표',
+      check: function () { if (radios.some(function (x) { return x.box.checked; })) return true; toast('한 명을 골라 주세요.'); return false; } })
+      .then(function (yes) {
+        if (!yes) return;
+        var pick = radios.filter(function (x) { return x.box.checked; })[0];
+        if (!pick || pick.ref === r.mine) return;
+        act('mvpVote', { eventId: r.eventId, ref: pick.ref }, 'MVP 투표했어요');
+      });
   }
 
   /* ---------- 팀장전(팀장 픽) ---------- */

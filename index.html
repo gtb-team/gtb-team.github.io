@@ -134,6 +134,25 @@
   .who a { flex: none; color: var(--sat); font: 700 20px/1 var(--num); text-decoration: none; }
   .who small { flex: none; color: var(--ink-2); }
   button.leaf__ft { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; font-family: inherit; cursor: pointer; }
+  .leaf__draft { display: block; width: 100%; padding: 6px 3px 7px; border: 0; border-top: 1px solid var(--line); background: none; font: 800 11px/1.3 inherit; font-family: inherit; color: var(--ink); cursor: pointer; }
+  .leaf__draft--live { color: #8a5a00; }
+  .leaf__draft--done { color: var(--ink-2); }
+  .teams { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+  .team { border: 1px solid var(--line); border-radius: 10px; padding: 8px 8px 10px; min-height: 120px; }
+  .team--turn { box-shadow: 0 0 0 2px var(--ink); }
+  .team__name { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: 13px; font-weight: 800; }
+  .team__dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line); flex: none; vertical-align: -2px; }
+  .team__dot--검정 { background: #1f2733; } .team__dot--흰색 { background: #ffffff; } .team__dot--주황 { background: #f2871b; }
+  .team ol { margin: 0; padding: 0 0 0 18px; font-size: 13px; line-height: 1.7; }
+  .team ol li.cap { font-weight: 800; list-style: none; margin-left: -18px; }
+  .team ol li.cap::before { content: '★ '; }
+  .turn { margin: 8px 0 4px; padding: 10px 12px; border-radius: 8px; background: var(--note-bg); font-size: 14px; font-weight: 800; }
+  .turn--me { background: #fff3d1; color: #5a3d00; }
+  .pool { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .pool li > * { display: block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 16px; font-size: 14px; background: none; font-family: inherit; color: var(--ink); }
+  .pool li button { border-color: var(--ink); }
+  .capsel { display: grid; grid-template-columns: 56px 1fr; gap: 8px 10px; align-items: center; margin: 10px 0; }
+  .capsel select { min-height: 42px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 15px; font-family: inherit; color: var(--ink); }
   .tel a { flex: none; color: var(--sat); font: 700 19px/1 var(--num); letter-spacing: 0.02em; text-decoration: none; }
   .tel small { color: var(--ink-2); }
   .linkbtn svg { vertical-align: -2px; margin-right: 3px; }
@@ -274,7 +293,7 @@
   var CAME_BACK = false;                       // 카카오 로그인에서 방금 돌아온 접속인지
   var DOW = ['일', '월', '화', '수', '목', '금', '토'];
   var app = document.getElementById('app');
-  var S = { token: '', data: null, tab: 'events', justApplied: '', form: null, editName: false, recent: null, view: 'main', fee: null, feePick: null, drafts: {}, asMember: false, contacts: {},
+  var S = { token: '', data: null, tab: 'events', justApplied: '', form: null, editName: false, recent: null, view: 'main', fee: null, feePick: null, drafts: {}, asMember: false, contacts: {}, draft: null, draftTimer: null, capPick: {},
     range: null, loadingMore: false, scroll: { mode: 'anchor' } };
   var memToken = '';
 
@@ -734,12 +753,19 @@
              : [(isToday ? '오늘은 ' : ''), h('b', { text: celebrants.join(', ') }), ' 님 생일이에요. 축하해 주세요!']) : null;
       out.push(h('section', { class: 'day' + (done ? ' day--past' : '') + (next ? ' day--next' : '') },
         h('h2', { class: 'vh', text: dayLabel(date) + (rel ? ', ' + rel : '') }),
-        h('div', { class: cls, 'aria-hidden': 'true' },
-          h('div', { class: 'leaf__month', text: p.m + '월' }),
-          h('div', { class: 'leaf__num', text: String(p.d) }),
-          h('div', { class: 'leaf__dow', text: DOW[p.dow] + '요일' }),
-          rel ? h('div', { class: 'leaf__rel', text: rel }) : null,
-          isToday && !done ? h('div', { class: 'stamp' }, d.sameDayApply ? '취소' : '신청', h('br'), '마감') : null,
+        h('div', { class: cls },
+          // 날짜 글씨는 위의 숨긴 제목이 읽어 주므로 보조기기에는 감춘다(아래의 팀장전·꼴찌 버튼은 읽혀야 하므로 감싸지 않는다)
+          h('div', { 'aria-hidden': 'true' },
+            h('div', { class: 'leaf__month', text: p.m + '월' }),
+            h('div', { class: 'leaf__num', text: String(p.d) }),
+            h('div', { class: 'leaf__dow', text: DOW[p.dow] + '요일' }),
+            rel ? h('div', { class: 'leaf__rel', text: rel }) : null,
+            isToday && !done ? h('div', { class: 'stamp' }, d.sameDayApply ? '취소' : '신청', h('br'), '마감') : null),
+          byDate[date].filter(function (e) { return e.draft; }).map(function (e) {            // 팀장전: 정원이 차면 가능, 시작되면 진행 중, 끝나면 팀 구성
+            var label = e.draft === '완료' ? '팀 구성 보기' : e.draft === '진행' ? '팀장전 진행 중' : '팀장전 가능';
+            return h('button', { class: 'leaf__draft' + (e.draft === '진행' ? ' leaf__draft--live' : e.draft === '완료' ? ' leaf__draft--done' : ''), type: 'button', text: label,
+              'aria-label': label + ': ' + e.title, onclick: function () { openDraft(e); } });
+          }),
           byDate[date].filter(function (e) { return e.freethrow; }).map(function (e) {        // 자유투 꼴찌(음료수 당번): 이름과 이달 횟수
             return h('button', { class: 'leaf__ft', type: 'button', 'aria-label': '자유투 꼴찌 ' + e.freethrow.name + ', 이달 순위 보기', onclick: function () { showRank(e); } },
               '🥤 꼴찌', h('b', { text: e.freethrow.name }), h('i', { text: '이달 ' + e.freethrow.count + '회' }));
@@ -1282,6 +1308,128 @@
         h('button', { class: 'btn btn--ghost', type: 'button', text: thisMonth + ' 정산', onclick: function () { run(thisMonth); } })));
   }
 
+  /* ---------- 팀장전(팀장 픽) ---------- */
+  function openDraft(ev) {
+    if (document.body.classList.contains('is-busy')) return;
+    setBusy(true);
+    call('draftState', { eventId: ev.id }).then(function (r) {
+      setBusy(false); S.draft = r; S.view = 'draft'; S.scroll = { mode: 'top' }; render(); startDraftPolling();
+    }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
+  }
+  function closeDraft() { stopDraftPolling(); S.view = 'main'; S.draft = null; S.scroll = { mode: 'anchor' }; load(); }
+
+  /**
+   * 화면을 열어 둔 동안 몇 초마다 새로 받아 온다(다른 사람의 픽이 보이도록). 화면을 막지 않고 뒤에서만 돈다.
+   *  - 바뀐 것이 있을 때만 다시 그린다(열어 둔 창·고르던 값은 그대로).
+   *  - 화면이 가려지면 쉬고, 팀 구성이 끝나면 멈춘다.
+   *  - 2분 동안 변화가 없으면 8초 간격으로 늦추고, 여러 사람이 같은 순간에 몰리지 않도록 조금씩 어긋나게 한다.
+   */
+  function startDraftPolling() {
+    stopDraftPolling();
+    var idle = 0;
+    var schedule = function () {
+      var base = idle >= 30 ? 8000 : 4000;
+      S.draftTimer = window.setTimeout(tick, base + Math.floor(Math.random() * 800));
+    };
+    var tick = function () {
+      if (S.view !== 'draft' || !S.draft) return;
+      if (S.draft.status === '완료') return;
+      if (document.hidden || document.body.classList.contains('is-busy')) { schedule(); return; }
+      call('draftState', { eventId: S.draft.eventId }).then(function (r) {
+        if (S.view !== 'draft') return;
+        var before = JSON.stringify(S.draft), after = JSON.stringify(r);
+        S.draft = r;
+        if (before !== after) { idle = 0; render(); } else idle++;
+        schedule();
+      }, function () { schedule(); });
+    };
+    schedule();
+  }
+  function stopDraftPolling() { if (S.draftTimer) { window.clearTimeout(S.draftTimer); S.draftTimer = null; } }
+
+  function draftCall(action, payload, doneMsg) {
+    if (document.body.classList.contains('is-busy')) return;
+    setBusy(true);
+    call(action, payload).then(function (r) { setBusy(false); S.draft = r; render(); if (doneMsg) toast(doneMsg); },
+      function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '처리하지 못했어요.'); });
+  }
+
+  function renderDraft() {
+    var r = S.draft, teams = r.teams;
+    var back = h('button', { class: 'linkbtn', type: 'button', text: '참석신청으로 돌아가기', onclick: closeDraft });
+    var root = h('div', { class: 'sheet' },
+      h('div', { class: 'stick', id: 'stick' },
+        h('header', { class: 'top' }, h('div', { class: 'top__text' }, h('h1', { text: '팀장전' }), h('p', null, dayLabel(r.date) + '  ' + r.title)), back)));
+    var panel = h('section', { class: 'panel' });
+    root.appendChild(panel);
+    var dot = function (t) { return h('span', { class: 'team__dot team__dot--' + t, 'aria-hidden': 'true' }); };
+
+    if (r.status === '없음') {
+      panel.appendChild(h('p', { class: 'note', text: '참석 확정이 정원(' + r.capacity + '명)만큼 차면 팀장전을 시작할 수 있어요. 지금 ' + r.confirmedCount + '명이에요.' }));
+      mount(root); return;
+    }
+    if (r.status === '가능') {
+      if (!r.isStaff) {
+        panel.appendChild(h('p', { class: 'note', text: '정원이 찼어요. 운영진이 팀장 세 명을 정하면 픽이 시작돼요.' }));
+        mount(root); return;
+      }
+      panel.appendChild(h('h2', { text: '팀장 정하기' }));
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 6px', text: '유니폼 색별로 팀장을 고르세요. 확정하면 검정 → 흰색 → 주황 → 주황 → 흰색 → 검정 순서로 한 명씩 뽑아요.' }));
+      var sel = {};
+      var grid = h('div', { class: 'capsel' });
+      teams.forEach(function (t) {
+        var s = h('select', { 'aria-label': t + ' 팀장' }, h('option', { value: '', text: '선택' }),
+          r.players.map(function (p) { return h('option', { value: p.ref, text: p.name + (p.guest ? ' (게스트)' : '') }); }));
+        if (S.capPick[t]) s.value = S.capPick[t];
+        s.addEventListener('change', function () { S.capPick[t] = s.value; });
+        sel[t] = s;
+        grid.appendChild(h('label', { class: 'team__name', text: t }, dot(t)));
+        grid.appendChild(s);
+      });
+      panel.appendChild(grid);
+      panel.appendChild(h('button', { class: 'btn', type: 'button', text: '팀장 확정 · 픽 시작', onclick: function () {
+        var caps = {}; teams.forEach(function (t) { caps[t] = sel[t].value; });
+        if (teams.some(function (t) { return !caps[t]; })) { toast('세 팀장을 모두 골라 주세요.'); return; }
+        if (new Set(teams.map(function (t) { return caps[t]; })).size !== teams.length) { toast('팀장은 서로 다른 사람이어야 해요.'); return; }
+        S.capPick = {};
+        draftCall('draftStart', { eventId: r.eventId, captains: caps }, '픽을 시작했어요');
+      } }));
+      mount(root); return;
+    }
+
+    // 진행 중 / 완료: 팀 판
+    if (r.status === '완료') panel.appendChild(h('p', { class: 'note', text: '팀 구성이 끝났어요.' }));
+    else if (r.turn) panel.appendChild(h('div', { class: 'turn' + (r.canPick ? ' turn--me' : '') },
+      dot(r.turn.team), ' ', r.turn.team + ' 팀장 ' + r.turn.captainName + ' 님 차례 (' + r.turn.round + '라운드)' + (r.canPick ? ' · 아래에서 한 명을 누르세요' : '')));
+    var board = h('div', { class: 'teams' }, teams.map(function (t) {
+      return h('div', { class: 'team' + (r.turn && r.turn.team === t ? ' team--turn' : '') },
+        h('p', { class: 'team__name' }, dot(t), t),
+        h('ol', null, h('li', { class: 'cap', text: r.captains[t].name }),
+          r.picks.filter(function (p) { return p.team === t; }).map(function (p) { return h('li', { text: p.name }); })));
+    }));
+    panel.appendChild(board);
+    if (r.status !== '완료') {
+      panel.appendChild(h('h2', { text: '남은 사람 ' + r.pool.length + '명' }));
+      panel.appendChild(h('ul', { class: 'pool' }, r.pool.map(function (p) {
+        var label = p.name + (p.guest ? ' (게스트)' : '');
+        return h('li', null, r.canPick
+          ? h('button', { type: 'button', text: label, onclick: function () {
+              ask({ title: r.turn.team + ' 팀이 ' + p.name + ' 님을 뽑을까요?', ok: '뽑기' }).then(function (yes) { if (yes) draftCall('draftPick', { eventId: r.eventId, ref: p.ref }, p.name + ' 님을 ' + r.turn.team + ' 팀으로'); });
+            } })
+          : h('span', { text: label }));
+      })));
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:10px 0 0', text: '이 화면은 4초마다 자동으로 새로 받아 와요.' }));
+    }
+    if (r.canManage) {
+      panel.appendChild(h('div', { class: 'act', style: 'margin-top:14px' },
+        r.picks && r.picks.length ? h('button', { class: 'btn btn--ghost', type: 'button', text: '마지막 픽 취소', onclick: function () { draftCall('draftUndo', { eventId: r.eventId }, '마지막 픽을 취소했어요'); } }) : null,
+        h('button', { class: 'btn btn--ghost', type: 'button', text: '팀장전 초기화', onclick: function () {
+          ask({ title: '팀장전을 처음부터 다시 할까요?', text: '팀장과 픽 기록이 모두 지워져요.', ok: '초기화', danger: true }).then(function (yes) { if (yes) draftCall('draftReset', { eventId: r.eventId }, '초기화했어요'); });
+        } })));
+    }
+    mount(root);
+  }
+
   /* ---------- 월회비 신청 ---------- */
   function openFee() {
     if (document.body.classList.contains('is-busy')) return;
@@ -1400,6 +1548,7 @@
     var d = S.data;
     if (!d) return;
     if (S.view === 'fee' && S.fee && d.stage === 'ready') return renderFee();
+    if (S.view === 'draft' && S.draft && d.stage === 'ready') return renderDraft();
     if (d.stage === 'register' || S.editName) return renderRegister(d);
     if (d.stage === 'pending') return renderPending(d);
     if (d.stage === 'blocked') return solo(h('h1', { text: '이용이 제한된 계정이에요' }), h('p', { text: '운영진에게 문의해 주세요.' }));

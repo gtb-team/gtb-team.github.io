@@ -143,6 +143,7 @@
   .team__name { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: 13px; font-weight: 800; }
   .team__dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line); flex: none; vertical-align: -2px; }
   .team__dot--검정 { background: #1f2733; } .team__dot--흰색 { background: #ffffff; } .team__dot--주황 { background: #f2871b; }
+  @media (prefers-color-scheme: dark) { .team__dot--검정 { border-color: #9aa6b5; border-width: 2px; } }   /* 어두운 화면에서 검정 점이 묻히지 않게 */
   .team ol { margin: 0; padding: 0 0 0 18px; font-size: 13px; line-height: 1.7; }
   .team ol li.cap { font-weight: 800; list-style: none; margin-left: -18px; }
   .team ol li.cap::before { content: '★ '; }
@@ -1398,7 +1399,7 @@
       var grid = h('div', { class: 'capsel' });
       teams.forEach(function (t) {
         var s = h('select', { 'aria-label': t + ' 팀장' }, h('option', { value: '', text: '선택' }),
-          r.players.map(function (p) { return h('option', { value: p.ref, text: p.name + (p.guest ? ' (게스트)' : '') }); }));
+          r.players.filter(function (p) { return !p.guest; }).map(function (p) { return h('option', { value: p.ref, text: p.name }); }));   // 게스트는 팀장 불가
         if (S.capPick[t]) s.value = S.capPick[t];
         s.addEventListener('change', function () { S.capPick[t] = s.value; });
         sel[t] = s;

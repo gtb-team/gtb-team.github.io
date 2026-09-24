@@ -302,7 +302,7 @@
   var KEY = REMOTE ? 'gtb.token' : 'moim.session.v1';
   var TRIED = 'gtb.autoTried';                 // 이번 접속에서 카카오 자동 로그인을 이미 시도했는지(반복 방지)
   var FASTKEY = 'gtb.fast';                    // 빠른 읽기(Cloudflare Worker) 주소. Apps Script 가 알려 주면 기억해 둔다
-  var READ_FAST = { state: 1, moreEvents: 1, draftState: 1, teamsState: 1, mvpState: 1, freethrowRank: 1 };
+  var READ_FAST = { state: 1, moreEvents: 1, draftState: 1, teamsState: 1, mvpState: 1, freethrowRank: 1, contactOne: 1, contacts: 1 };
   function fastUrl() { try { return REMOTE ? (window.localStorage.getItem(FASTKEY) || '') : ''; } catch (e) { return ''; } }
   function rememberFast(u) {
     if (!REMOTE || typeof u !== 'string') return;
@@ -465,10 +465,7 @@
     if (S.range) { payload.from = S.range.from; payload.to = S.range.to; }   // 위·아래로 더 불러온 구간을 유지
     if (S.asMember) payload.asMember = true;                                 // 운영진의 회원 화면 미리보기
     if (REMOTE && READ_FAST[action] && fastUrl()) {
-      return fastPost(action, S.token, payload).then(function (data) {
-        if (action === 'state' && (data.ver || 0) < (S.maxVer || 0)) return post(action, S.token, payload);   // 내가 방금 바꾼 것보다 오래된 판이면 원본에 묻는다
-        return data;
-      }, function () { return post(action, S.token, payload); });
+      return fastPost(action, S.token, payload).then(null, function (e) { if (e && e.final) throw e; return post(action, S.token, payload); });   // 안 되면(옛 판 포함) 원본에 묻는다
     }
     if (REMOTE) return post(action, S.token, payload);
     return new Promise(function (resolve, reject) {
@@ -496,7 +493,7 @@
           catch (e) { throw { code: 'BADRESPONSE', message: '서버가 이상한 응답을 보냈어요(' + r.status + '). 잠시 후 다시 시도해 주세요.' }; }
         });
       }).then(function (res) {
-        if (res && res.ok) resolve(res.data);
+        if (res && res.ok) { if (res.ver && res.ver > (S.maxVer || 0)) S.maxVer = res.ver; resolve(res.data); }   // 원본에서 받은 판 번호는 기준이 된다
         else reject(res || { code: 'SERVER', message: '응답을 받지 못했어요.' });
       }, function (e) { reject(e && e.code ? e : offline); });
     });
@@ -514,7 +511,9 @@
         .then(function (r) { return r.json(); })
         .then(function (res) {
           if (done) return; done = true; window.clearTimeout(timer);
-          if (res && res.ok) resolve(res.data); else reject({ code: 'FALLBACK' });
+          if (res && res.ok && (res.ver || 0) >= (S.maxVer || 0)) resolve(res.data);   // 내가 이미 본 것보다 옛 판이면 쓰지 않는다
+          else if (res && res.code === 'LIMIT') reject({ code: 'LIMIT', message: res.message, final: true });   // 조회 제한은 Apps Script 로 돌리지 않는다
+          else reject({ code: 'FALLBACK' });
         }, function () { if (!done) { done = true; window.clearTimeout(timer); reject({ code: 'FALLBACK' }); } });
     });
   }

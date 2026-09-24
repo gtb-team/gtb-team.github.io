@@ -159,8 +159,6 @@
   .team ol li button { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
   .team ol li button::after { content: ' ×'; color: var(--ink-2); }
   .seg { display: flex; gap: 6px; margin: 4px 0 10px; }
-  .seg button { flex: 1; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: none; font: 700 14px/1 inherit; font-family: inherit; color: var(--ink); }
-  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .addname { display: flex; gap: 6px; margin-top: 10px; }
   .addname input { flex: 1; min-width: 0; min-height: 42px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; font-family: inherit; background: var(--paper); color: var(--ink); }
   .pool .ns { color: var(--sun); font-size: 12px; margin-left: 3px; }
@@ -1413,7 +1411,7 @@
 
     // 나누기(편집)
     panel.appendChild(h('div', { class: 'seg', role: 'group', 'aria-label': '팀 수' }, [2, 3].map(function (n) {
-      return h('button', { type: 'button', 'aria-pressed': T.mode === n ? 'true' : 'false', text: n === 2 ? '2파전 · 검정 vs 흰색' : '3파전 · 검정 vs 흰색 vs 주황', onclick: function () {
+      return h('button', { type: 'button', 'aria-pressed': T.mode === n ? 'true' : 'false', 'aria-label': n === 2 ? '2파전 · 검정 vs 흰색' : '3파전 · 검정 vs 흰색 vs 주황', text: n === 2 ? '2파전 (검정·흰색)' : '3파전 (검정·흰색·주황)', onclick: function () {
         T.mode = n; if (n === 2) { T.teams['주황'] = []; if (T.active === '주황') T.active = '검정'; } render();
       } });
     })));

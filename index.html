@@ -71,9 +71,6 @@
   .leaf--sat .leaf__num, .leaf--sat .leaf__dow { color: var(--sat); }
   .leaf--sun .leaf__month { background: var(--sun); color: #fff; }
   .leaf__rel { border-top: 1px solid var(--line); font-size: 12px; font-weight: 800; line-height: 22px; }
-  .leaf__ft { border-top: 1px solid var(--line); padding: 4px 3px 5px; font-size: 11px; line-height: 1.25; color: var(--ink-2); }
-  .leaf__ft b { display: block; font-size: 12px; color: var(--ink); word-break: keep-all; }
-  .leaf__ft i { display: block; margin-top: 1px; font: 700 12px/1 var(--num); font-style: normal; color: var(--sun); }
   .tagx--ft { color: #8a5a00; border-color: #e0a800; }
   .rank { list-style: none; margin: 0; padding: 0; }
   .rank li { display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-top: 1px solid var(--line); font-size: 15px; }
@@ -133,7 +130,6 @@
   .who__sub { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 400; color: var(--ink-2); }
   .who a { flex: none; color: var(--sat); font: 700 20px/1 var(--num); text-decoration: none; }
   .who small { flex: none; color: var(--ink-2); }
-  button.leaf__ft { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; font-family: inherit; cursor: pointer; }
   .leaf__mvp { display: block; width: 100%; padding: 4px 3px 5px; border: 0; border-top: 1px solid var(--line); background: none; font-family: inherit; font-size: 11px; line-height: 1.25; color: var(--ink-2); text-align: center; }
   .leaf__mvp b { display: block; font-size: 12px; color: var(--ink); word-break: keep-all; }
   .leaf__mvp i { display: block; margin-top: 1px; font: 700 12px/1 var(--num); font-style: normal; color: var(--sun); }
@@ -157,6 +153,17 @@
   .pool { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
   .pool li > * { display: block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 16px; font-size: 14px; background: none; font-family: inherit; color: var(--ink); }
   .pool li button { border-color: var(--ink); }
+  .teams--2 { grid-template-columns: repeat(2, 1fr); }
+  .team--active { box-shadow: 0 0 0 2px var(--sat); }
+  button.team { text-align: left; background: none; font-family: inherit; color: var(--ink); cursor: pointer; }
+  .team ol li button { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+  .team ol li button::after { content: ' ×'; color: var(--ink-2); }
+  .seg { display: flex; gap: 6px; margin: 4px 0 10px; }
+  .seg button { flex: 1; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: none; font: 700 14px/1 inherit; font-family: inherit; color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .addname { display: flex; gap: 6px; margin-top: 10px; }
+  .addname input { flex: 1; min-width: 0; min-height: 42px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; font-family: inherit; background: var(--paper); color: var(--ink); }
+  .pool .ns { color: var(--sun); font-size: 12px; margin-left: 3px; }
   .capsel { display: grid; grid-template-columns: 56px 1fr; gap: 8px 10px; align-items: center; margin: 10px 0; }
   .capsel select { min-height: 42px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 15px; font-family: inherit; color: var(--ink); }
   .tel a { flex: none; color: var(--sat); font: 700 19px/1 var(--num); letter-spacing: 0.02em; text-decoration: none; }
@@ -769,9 +776,14 @@
             rel ? h('div', { class: 'leaf__rel', text: rel }) : null,
             isToday && !done ? h('div', { class: 'stamp' }, d.sameDayApply ? '취소' : '신청', h('br'), '마감') : null),
           byDate[date].filter(function (e) { return e.draft; }).map(function (e) {            // 팀장전: 정원이 차면 가능, 시작되면 진행 중, 끝나면 팀 구성
-            var label = e.draft === '완료' ? '팀 구성 보기' : e.draft === '진행' ? '팀장전 진행 중' : '팀장전 가능';
+            var label = e.draft === '완료' ? '팀장전 결과' : e.draft === '진행' ? '팀장전 진행 중' : '팀장전 가능';
             return h('button', { class: 'leaf__draft' + (e.draft === '진행' ? ' leaf__draft--live' : e.draft === '완료' ? ' leaf__draft--done' : ''), type: 'button', text: label,
               'aria-label': label + ': ' + e.title, onclick: function () { openDraft(e); } });
+          }),
+          byDate[date].filter(function (e) { return e.teams; }).map(function (e) {            // 팀 구성: 저장됐으면 보기, 아니면 나누기(오늘·내일 모임)
+            var label = e.teams === '저장됨' ? '팀 구성 보기' : '팀 나누기';
+            return h('button', { class: 'leaf__draft' + (e.teams === '저장됨' ? '' : ' leaf__draft--done'), type: 'button', text: label,
+              'aria-label': label + ': ' + e.title, onclick: function () { openTeams(e); } });
           }),
           byDate[date].filter(function (e) { return e.mvp; }).map(function (e) {              // MVP: 확정 뒤엔 이름·표, 투표 중엔 투표 버튼
             if (!e.mvp.open) return h('div', { class: 'leaf__mvp', title: 'MVP' }, '🏆 MVP', h('b', { text: e.mvp.name }), h('i', { text: e.mvp.votes + '표' }));
@@ -779,10 +791,7 @@
             return h('button', { class: 'leaf__mvp' + (e.mvp.mine ? '' : ' leaf__mvp--todo'), type: 'button', 'aria-label': 'MVP 투표: ' + e.title, onclick: function () { openMvp(e); } },
               '🏆 MVP', h('b', { text: e.mvp.mine ? '내 표: ' + e.mvp.mine : '투표하기' }), e.mvp.total ? h('i', { text: e.mvp.total + '표' }) : null);
           }),
-          byDate[date].filter(function (e) { return e.freethrow && e.freethrow.length; }).map(function (e) {   // 자유투 꼴찌(최대 3명): 이름과 이달 횟수
-            return h('button', { class: 'leaf__ft', type: 'button', 'aria-label': '자유투 꼴찌 ' + e.freethrow.map(function (f) { return f.name; }).join(', ') + ', 이달 순위 보기', onclick: function () { showRank(e); } },
-              '🥤 꼴찌', e.freethrow.map(function (f) { return [h('b', { text: f.name }), h('i', { text: '이달 ' + f.count + '회' })]; }));
-          })),
+          null),
         h('div', { class: 'day__events' }, bdayNote, byDate[date].map(function (ev) { return eventBlock(ev, d); }))));
     });
     out.push(d.hasFuture
@@ -1087,6 +1096,10 @@
         body.appendChild(h('label', { class: 'pick' }, ft, h('span', { text: '🥤 자유투 꼴찌 (음료수 당번)' + (!a.ft && ftCount >= 3 ? ' · 이미 3명' : ftCount ? ' · 지금 ' + ftCount + '명' : '') })));
       }
     }
+    if (a.ft) body.appendChild(h('p', { class: 'fine', style: 'margin:6px 0 0' }, h('button', { class: 'linkbtn', type: 'button', text: '🥤 이달 꼴찌 순위 보기', onclick: function () {
+      var open = body.closest('.veil'); if (open) open.remove();
+      showRank(ev);
+    } })));
     if (a.mvpOk) {                                                          // 나온 사람이면 이름 창에서도 MVP 투표(자기 자신 제외)
       var mine = ev.mvp && ev.mvp.mine;
       var mv = h('input', { type: 'checkbox', checked: !!a.myVote });
@@ -1346,6 +1359,112 @@
         h('button', { class: 'btn btn--ghost', type: 'button', text: thisMonth + ' 정산', onclick: function () { run(thisMonth); } })));
   }
 
+  /* ---------- 팀 구성(누구나 나눠서 저장) ---------- */
+  var TEAM_COLORS = ['검정', '흰색', '주황'];
+  function openTeams(ev) {
+    if (document.body.classList.contains('is-busy')) return;
+    setBusy(true);
+    call('teamsState', ev.id ? { eventId: ev.id } : { date: ev.date }).then(function (r) {
+      setBusy(false); S.team = teamStateFrom(r); S.view = 'teams'; S.scroll = { mode: 'top' }; render();
+    }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
+  }
+  function teamStateFrom(r) {
+    var t = { r: r, mode: r.saved ? r.saved.mode : 3, teams: { '검정': [], '흰색': [], '주황': [] }, active: '검정', editing: !r.saved };
+    if (r.saved) TEAM_COLORS.forEach(function (c) { t.teams[c] = (r.saved.teams[c] || []).map(function (x) { return { ref: x.ref || '', name: x.name }; }); });
+    return t;
+  }
+  function closeTeams() { S.view = 'main'; S.team = null; S.scroll = { mode: 'anchor' }; load(); }
+  function teamsLink(date) { return (REMOTE ? selfUrl : (BOOT.appUrl || '')) + '?teams=' + date; }
+
+  function renderTeams() {
+    var T = S.team, r = T.r, colors = TEAM_COLORS.slice(0, T.mode);
+    var root = h('div', { class: 'sheet' },
+      h('div', { class: 'stick', id: 'stick' },
+        h('header', { class: 'top' }, h('div', { class: 'top__text' }, h('h1', { text: '팀 구성' }), h('p', null, dayLabel(r.date) + '  ' + r.title)),
+          h('button', { class: 'linkbtn', type: 'button', text: '참석신청으로 돌아가기', onclick: closeTeams }))));
+    var panel = h('section', { class: 'panel' });
+    root.appendChild(panel);
+    var dot = function (c) { return h('span', { class: 'team__dot team__dot--' + c, 'aria-hidden': 'true' }); };
+    var assigned = {};
+    colors.forEach(function (c) { T.teams[c].forEach(function (x) { if (x.ref) assigned[x.ref] = c; }); });
+
+    if (!T.editing) {                                    // 저장된 구성 보기
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: r.saved.by + ' 님이 ' + r.saved.at.slice(5, 16) + '에 저장' }));
+      panel.appendChild(h('div', { class: 'teams' + (T.mode === 2 ? ' teams--2' : '') }, colors.map(function (c) {
+        return h('div', { class: 'team' }, h('p', { class: 'team__name' }, dot(c), c + ' ' + T.teams[c].length + '명'),
+          h('ol', null, T.teams[c].map(function (x) { return h('li', { text: x.name }); })));
+      })));
+      var left = r.players.filter(function (p) { return !assigned[p.ref]; });
+      if (left.length) panel.appendChild(h('p', { class: 'fine', text: '팀에 안 들어간 참석자: ' + left.map(function (p) { return p.name; }).join(', ') }));
+      panel.appendChild(h('div', { class: 'act', style: 'margin-top:12px' },
+        h('button', { class: 'btn', type: 'button', text: '수정하기', onclick: function () { T.editing = true; render(); } }),
+        r.canDelete ? h('button', { class: 'btn btn--ghost', type: 'button', text: '팀 구성 지우기', onclick: function () {
+          ask({ title: '저장된 팀 구성을 지울까요?', ok: '지우기', danger: true }).then(function (yes) {
+            if (!yes) return;
+            setBusy(true);
+            call('teamsDelete', { eventId: r.eventId }).then(function (x) { setBusy(false); S.team = teamStateFrom(x); render(); toast('지웠어요'); },
+              function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '지우지 못했어요.'); });
+          });
+        } }) : null));
+      var link = teamsLink(r.date);
+      if (link) panel.appendChild(h('p', { class: 'fine', style: 'margin:10px 0 0; word-break: break-all' }, '이 화면 주소: ', h('a', { href: link, text: link, target: '_top' })));
+      mount(root); return;
+    }
+
+    // 나누기(편집)
+    panel.appendChild(h('div', { class: 'seg', role: 'group', 'aria-label': '팀 수' }, [2, 3].map(function (n) {
+      return h('button', { type: 'button', 'aria-pressed': T.mode === n ? 'true' : 'false', text: n === 2 ? '2파전 · 검정 vs 흰색' : '3파전 · 검정 vs 흰색 vs 주황', onclick: function () {
+        T.mode = n; if (n === 2) { T.teams['주황'] = []; if (T.active === '주황') T.active = '검정'; } render();
+      } });
+    })));
+    panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: '팀을 눌러 고른 뒤, 아래 참석자 이름을 누르면 그 팀에 들어가요. 팀 안의 이름을 누르면 빠져요. 안 넣은 사람이 있어도 괜찮아요.' }));
+    panel.appendChild(h('div', { class: 'teams' + (T.mode === 2 ? ' teams--2' : '') }, colors.map(function (c) {
+      return h('div', { class: 'team' + (T.active === c ? ' team--active' : ''), role: 'button', tabindex: '0', 'aria-label': c + ' 팀 고르기', 'aria-pressed': T.active === c ? 'true' : 'false',
+          onclick: function (e) { if (e.target.closest('li button')) return; T.active = c; render(); } },
+        h('p', { class: 'team__name' }, dot(c), c + ' ' + T.teams[c].length + '명'),
+        h('ol', null, T.teams[c].map(function (x, i) {
+          return h('li', null, h('button', { type: 'button', text: x.name, 'aria-label': x.name + ' 빼기', onclick: function () { T.teams[c].splice(i, 1); render(); } }));
+        })));
+    })));
+    var free = r.players.filter(function (p) { return !assigned[p.ref]; });
+    panel.appendChild(h('h2', { text: '안 나눈 참석자 ' + free.length + '명' }));
+    panel.appendChild(h('ul', { class: 'pool' }, free.map(function (p) {
+      return h('li', null, h('button', { type: 'button', 'aria-label': p.name + '을(를) ' + T.active + ' 팀에', onclick: function () { T.teams[T.active].push({ ref: p.ref, name: p.name }); render(); } },
+        p.name + (p.guest ? ' (게스트)' : ''), p.noshow ? h('span', { class: 'ns', text: '노쇼' }) : null));
+    })));
+    var input = h('input', { type: 'text', maxlength: '20', placeholder: '명단에 없는 이름', 'aria-label': '직접 이름 넣기' });
+    var addFree = function () {
+      var v = input.value.trim();
+      if (!v) { input.focus(); return; }
+      var dup = colors.some(function (c) { return T.teams[c].some(function (x) { return !x.ref && x.name === v; }); });
+      if (dup) { toast('이미 들어가 있는 이름이에요.'); return; }
+      T.teams[T.active].push({ ref: '', name: v }); render();
+    };
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addFree(); } });
+    panel.appendChild(h('div', { class: 'addname' }, input, h('button', { class: 'btn btn--ghost', type: 'button', text: T.active + ' 팀에 추가', style: 'flex:none; width:auto; padding:0 14px', onclick: addFree })));
+    panel.appendChild(h('div', { class: 'act', style: 'margin-top:14px' },
+      h('button', { class: 'btn', type: 'button', text: '저장', onclick: function () {
+        var payload = { eventId: r.eventId, mode: T.mode, base: r.saved ? r.saved.ver : '', teams: {} };
+        colors.forEach(function (c) { payload.teams[c] = T.teams[c].map(function (x) { return x.ref ? { ref: x.ref, name: x.name } : { name: x.name }; }); });
+        if (!colors.some(function (c) { return T.teams[c].length; })) { toast('한 명 이상 팀에 넣어 주세요.'); return; }
+        setBusy(true);
+        call('teamsSave', payload).then(function (x) { setBusy(false); S.team = teamStateFrom(x); render(); toast('팀 구성을 저장했어요'); },
+          function (err) {
+            setBusy(false);
+            if (handleAuth(err)) return;
+            if (err && err.code === 'CONFLICT') {
+              ask({ title: '다른 사람이 먼저 저장했어요', text: err.message, ok: '새로 불러오기', cancel: '닫기' }).then(function (yes) { if (yes) openTeams({ id: r.eventId }); });
+              return;
+            }
+            toast(err.message || '저장하지 못했어요.');
+          });
+      } }),
+      h('button', { class: 'btn btn--ghost', type: 'button', text: r.saved ? '수정 취소' : '돌아가기', onclick: function () {
+        if (r.saved) { S.team = teamStateFrom(r); render(); } else closeTeams();
+      } })));
+    mount(root);
+  }
+
   /* ---------- MVP 투표 ---------- */
   function openMvp(ev) {
     if (document.body.classList.contains('is-busy')) return;
@@ -1389,6 +1508,8 @@
     session('gtb.deep', '');
     var m = /^draft=(\d{4}-\d{2}-\d{2})$/.exec(deep);
     if (m) openDraft({ date: m[1] });
+    var t = /^teams=(\d{4}-\d{2}-\d{2})$/.exec(deep);
+    if (t) openTeams({ date: t[1] });
   }
 
   /** 팀장전 화면의 주소(카톡 방에 올리거나 다른 브라우저에서 열 때) */
@@ -1640,6 +1761,7 @@
     if (!d) return;
     if (S.view === 'fee' && S.fee && d.stage === 'ready') return renderFee();
     if (S.view === 'draft' && S.draft && d.stage === 'ready') return renderDraft();
+    if (S.view === 'teams' && S.team && d.stage === 'ready') return renderTeams();
     if (d.stage === 'register' || S.editName) return renderRegister(d);
     if (d.stage === 'pending') return renderPending(d);
     if (d.stage === 'blocked') return solo(h('h1', { text: '이용이 제한된 계정이에요' }), h('p', { text: '운영진에게 문의해 주세요.' }));
@@ -1671,7 +1793,8 @@
   window.location.search.replace(/[?&]([^=&#]+)=([^&#]*)/g, function (_, k, v) { q[k] = decodeURIComponent(v.replace(/\+/g, ' ')); });
   CAME_BACK = !!(q.code || q.error);
   if (q.draft) session('gtb.deep', 'draft=' + q.draft);                          // 팀장전 직접 링크: 로그인을 거쳐 돌아와도 열리도록 기억해 둔다
-  if ((CAME_BACK || q.draft) && window.history && window.history.replaceState) window.history.replaceState(null, '', window.location.pathname);   // 주소창의 인가 코드·값은 바로 지운다
+  if (q.teams) session('gtb.deep', 'teams=' + q.teams);                          // 팀 구성 직접 링크
+  if ((CAME_BACK || q.draft || q.teams) && window.history && window.history.replaceState) window.history.replaceState(null, '', window.location.pathname);   // 주소창의 인가 코드·값은 바로 지운다
   selfUrl = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '/');
 
   function boot() {

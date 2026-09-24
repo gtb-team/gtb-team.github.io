@@ -281,6 +281,9 @@
   .bar { position: fixed; top: 0; left: 0; right: 0; z-index: 40; height: 3px; background: var(--sat); transform-origin: left; animation: load 1.6s ease-in-out infinite; }
   @keyframes load { 0% { transform: scaleX(0); } 60% { transform: scaleX(.8); } 100% { transform: scaleX(1); opacity: 0; } }
   .is-busy button, .is-busy a.kakao { pointer-events: none; opacity: .55; }
+  .is-busy.is-saving button, .is-busy.is-saving a.kakao { opacity: 1; }   /* 먼저 보여 준 뒤 뒤에서 저장하는 중: 흐리게 하지 않고 누르기만 막는다 */
+  .names li.is-pending > * { border-style: dashed; opacity: .7; }
+  .cmt--pending { opacity: .6; }
   @media (prefers-reduced-motion: reduce) { .done--new, .bar { animation: none; } }
 </style>
 </head>
@@ -395,8 +398,9 @@
     toastTimer = setTimeout(function () { var t = document.querySelector('.toast'); if (t) t.remove(); }, ms || 2800);
   }
 
-  function setBusy(on) {
+  function setBusy(on, quiet) {
     document.body.classList.toggle('is-busy', on);
+    document.body.classList.toggle('is-saving', !!(on && quiet));
     var bar = document.querySelector('.bar');
     if (on && !bar) document.body.appendChild(h('div', { class: 'bar' }));
     if (!on && bar) bar.remove();
@@ -556,6 +560,143 @@
       if (err.code !== 'INPUT' && err.code !== 'DUP' && err.code !== 'NETWORK') load(true);
       return false;
     });
+  }
+
+  /**
+   * 먼저 보여 주고 뒤에서 저장한다(낙관적 갱신).
+   *  predict(사본) 이 누른 결과를 예상해 사본을 고쳐 돌려주면, 그 화면을 즉시 그리고 요청을 보낸다.
+   *  서버 응답이 오면 진짜 결과로 바꿔 그리고(예상과 다르면 안내), 실패하면 누르기 전 화면으로 되돌린다.
+   *  예상할 수 없으면(null) 예전처럼 응답을 기다린다.
+   */
+  function actFast(action, payload, doneMsg, predict, staff) {
+    if (document.body.classList.contains('is-busy')) return Promise.resolve(false);
+    var prev = S.data, guess = null;
+    try { guess = predict ? predict(JSON.parse(JSON.stringify(S.data))) : null; } catch (e) { guess = null; }
+    if (!guess) return staff ? staffCall(action, payload, doneMsg) : act(action, payload, doneMsg);
+    if (staff) payload.recent = !!S.recent;
+    var guessMsg = typeof doneMsg === 'function' ? doneMsg(guess) : doneMsg;
+    S.data = guess; render();
+    if (guessMsg) toast(guessMsg);
+    setBusy(true, true);
+    return call(action, payload).then(function (r) {
+      setBusy(false);
+      var data = staff ? r.state : r;
+      keepRange(data); if (staff && r.recent) S.recent = r.recent; render();
+      var msg = typeof doneMsg === 'function' ? doneMsg(data) : doneMsg;
+      if (msg && msg !== guessMsg) toast(msg);          // 예상과 결과가 다를 때만 다시 알린다(예: 참석 확정 → 대기)
+      return true;
+    }, function (err) {
+      setBusy(false);
+      S.data = prev; render();                          // 실패: 누르기 전 화면으로
+      if (handleAuth(err)) return false;
+      toast(err.message || '처리하지 못했어요.');
+      if (!staff && err.code !== 'INPUT' && err.code !== 'DUP' && err.code !== 'NETWORK') load(true);
+      return false;
+    });
+  }
+
+  /* 예상 화면 만들기에 쓰는 도구들 */
+  function evIn(d, id) { return findEvent(d, id); }
+  function nowStamp() {
+    var t = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return p(t.getMonth() + 1) + '-' + p(t.getDate()) + ' ' + p(t.getHours()) + ':' + p(t.getMinutes());
+  }
+  function recount(e) {
+    e.confirmedCount = (e.confirmed || []).length; e.waitCount = (e.waiting || []).length; e.practiceCount = (e.practice || []).length;
+    e.full = !!e.capacity && e.confirmedCount >= e.capacity;
+  }
+  function predictApply(evId, kind) {
+    return function (d) {
+      var e = evIn(d, evId);
+      if (!e || e.my) return null;
+      var me = { name: d.me.nickname, kind: kind, me: true, pending: true, late: !!e.isToday };
+      var today = !!e.isToday;
+      if (kind === '연습') {
+        (e.practice = e.practice || []).push(me);
+        e.my = { kind: '연습', waiting: false, no: e.practice.length, canCancel: !today, late: today };
+      } else if (!e.capacity || (e.confirmed || []).length < e.capacity) {
+        (e.confirmed = e.confirmed || []).push(me);
+        e.my = { kind: '참석', waiting: false, no: e.confirmed.length, canCancel: !today, late: today };
+      } else {
+        (e.waiting = e.waiting || []).push(me);
+        e.my = { kind: '참석', waiting: true, no: e.waiting.length, canCancel: true, late: false };
+      }
+      recount(e);
+      return d;
+    };
+  }
+  function predictCancel(evId) {
+    return function (d) {
+      var e = evIn(d, evId);
+      if (!e || !e.my) return null;
+      var mine = function (a) { return a.me && a.kind !== '게스트'; };
+      var wasConfirmed = (e.confirmed || []).some(mine);
+      e.confirmed = (e.confirmed || []).filter(function (a) { return !mine(a); });
+      e.waiting = (e.waiting || []).filter(function (a) { return !mine(a); });
+      e.practice = (e.practice || []).filter(function (a) { return !mine(a); });
+      if (wasConfirmed && e.waiting.length && e.capacity && e.confirmed.length < e.capacity) e.confirmed.push(e.waiting.shift());   // 대기 1번이 올라온다
+      e.my = null;
+      recount(e);
+      return d;
+    };
+  }
+  function predictComment(evId, text) {
+    return function (d) {
+      var e = evIn(d, evId);
+      if (!e) return null;
+      (e.comments = e.comments || []).push({ id: 'tmp', name: d.me.nickname, text: text, at: nowStamp(), mine: true, pending: true });
+      return d;
+    };
+  }
+  function predictCommentChange(commentId, text) {        // text 가 null 이면 지우기
+    return function (d) {
+      var hit = false;
+      (d.events || []).forEach(function (e) {
+        e.comments = (e.comments || []).filter(function (c) {
+          if (c.id !== commentId) return true;
+          hit = true;
+          if (text === null) return false;
+          c.text = text; c.edited = true; c.pending = true; return true;
+        });
+      });
+      return hit ? d : null;
+    };
+  }
+  function predictVote(evId, pickName) {                   // pickName 이 '' 이면 표 거두기
+    return function (d) {
+      var e = evIn(d, evId);
+      if (!e || !e.mvp || !e.mvp.open) return null;
+      var had = !!e.mvp.mine;
+      e.mvp.mine = pickName;
+      e.mvp.total = Math.max(0, (e.mvp.total || 0) + (pickName && !had ? 1 : !pickName && had ? -1 : 0));
+      (e.confirmed || []).concat(e.waiting || [], e.practice || []).forEach(function (a) { a.myVote = !!pickName && a.name === pickName && !!a.mvpOk; });
+      return d;
+    };
+  }
+  /** 이름 창 [저장]: 노쇼·대기참 표시, 자유투 꼴찌, MVP 투표를 함께 예상 */
+  function predictMark(evId, a0, key) {
+    return function (d) {
+      var e = evIn(d, evId);
+      if (!e) return null;
+      var all = (e.confirmed || []).concat(e.waiting || [], e.practice || []);
+      var a = all.filter(function (x) { return (a0.k && x.k === a0.k) || (a0.id && x.id === a0.id && x.kind === a0.kind && x.name === a0.name); })[0];
+      if (!a) return null;
+      a.mark = key.mark || '';
+      if (key.freethrow === true || key.freethrow === false) {
+        var list = (e.freethrow || []).filter(function (f) { return f.name !== a.name; });
+        if (key.freethrow) list.push({ name: a.name, count: 1 });
+        e.freethrow = list.length ? list : null;
+        a.ft = !!key.freethrow;
+      }
+      if (key.mvp === true || key.mvp === false) {
+        if (!e.mvp || !e.mvp.open) return null;
+        var had = !!e.mvp.mine;
+        if (key.mvp) { all.forEach(function (x) { x.myVote = false; }); a.myVote = true; e.mvp.mine = a.name; if (!had) e.mvp.total = (e.mvp.total || 0) + 1; }
+        else if (a.myVote) { a.myVote = false; e.mvp.mine = ''; e.mvp.total = Math.max(0, (e.mvp.total || 0) - 1); }
+      }
+      a.pending = true;
+      return d;
+    };
   }
 
   /* ---------- 단독 화면들 ---------- */
@@ -867,7 +1008,7 @@
       if (a.mark === '노쇼') parts.push(h('span', { class: 'tagx tagx--no', text: '노쇼' }));
       if (a.mark === '참석' && where === 'waiting') parts.push(h('span', { class: 'tagx tagx--came', text: '나옴' }));
       if (a.ft) parts.push(h('span', { class: 'tagx tagx--ft', text: '🥤 꼴찌' }));
-      ul.appendChild(h('li', { class: (a.me ? 'is-me' : '') + (a.bday ? ' is-bday' : '') || null },
+      ul.appendChild(h('li', { class: (a.me ? 'is-me' : '') + (a.bday ? ' is-bday' : '') + (a.pending ? ' is-pending' : '') || null },
         (d.me.isStaff || ev.canMark || (d.contactsOpen && a.k)) ? h('button', { type: 'button', 'aria-label': a.name + (d.me.isStaff ? ' 운영진 메뉴' : ' 상세'), onclick: function () { entryMenu(ev, a, where); } }, parts)
                      : h('span', null, parts),
         a.bday ? h('i', { class: 'plus1', text: '+1', title: '생일 이벤트 +1', 'aria-label': '생일 이벤트 +1' }) : null));
@@ -909,12 +1050,12 @@
     var box = h('div', { class: 'cmts' });
     var editable = ev.date >= S.data.today;                                // 지난 모임의 댓글은 고칠 수 없다
     ev.comments.forEach(function (c) {
-      box.appendChild(h('p', { class: 'cmt' }, h('b', { text: c.name }),
+      box.appendChild(h('p', { class: 'cmt' + (c.pending ? ' cmt--pending' : '') }, h('b', { text: c.name }),
         h('span', null, c.text, c.edited ? h('small', { class: 'cmt__edited', text: ' (수정됨)' }) : null),
         h('small', { text: c.at.slice(0, 5).replace('-', '/') + ' ' + c.at.slice(6) }),
         c.mine && editable ? h('button', { class: 'linkbtn', type: 'button', text: '수정', 'aria-label': c.name + ' 댓글 수정', onclick: function () { editComment(c); } }) : null,
         (c.mine || S.data.me.isStaff) ? h('button', { class: 'linkbtn', type: 'button', text: '삭제', 'aria-label': c.name + ' 댓글 삭제', onclick: function () {
-          ask({ title: '댓글을 지울까요?', text: c.name + ': ' + c.text, ok: '삭제', danger: true }).then(function (yes) { if (yes) act('commentDelete', { commentId: c.id }, '댓글을 지웠어요'); });
+          ask({ title: '댓글을 지울까요?', text: c.name + ': ' + c.text, ok: '삭제', danger: true }).then(function (yes) { if (yes) actFast('commentDelete', { commentId: c.id }, '댓글을 지웠어요', predictCommentChange(c.id, null)); });
         } }) : null));
     });
     if (ev.date >= S.data.today) {
@@ -924,7 +1065,8 @@
       var send = function () {
         var text = input.value.trim();
         if (!text) { toast('내용을 입력해 주세요.'); input.focus(); return; }
-        act('comment', { eventId: ev.id, text: text }, '댓글을 남겼어요').then(function (ok) { if (ok) { S.drafts[ev.id] = ''; render(); } });
+        S.drafts[ev.id] = '';
+        actFast('comment', { eventId: ev.id, text: text }, '댓글을 남겼어요', predictComment(ev.id, text)).then(function (ok) { if (!ok) { S.drafts[ev.id] = text; render(); } });   // 실패하면 쓰던 글을 되살린다
       };
       input.addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
       box.appendChild(h('div', { class: 'cmtform' }, input, h('button', { class: 'btn btn--ghost', type: 'button', text: '등록', onclick: send })));
@@ -937,7 +1079,7 @@
     input.value = c.text;
     ask({ title: '댓글 수정', body: h('label', { class: 'field' }, h('span', { text: '내용' }), input), ok: '저장',
       check: function () { if (input.value.trim()) return true; toast('내용을 입력해 주세요.'); input.focus(); return false; } })
-      .then(function (yes) { if (yes) act('commentEdit', { commentId: c.id, text: input.value.trim() }, '댓글을 수정했어요'); });
+      .then(function (yes) { if (yes) actFast('commentEdit', { commentId: c.id, text: input.value.trim() }, '댓글을 수정했어요', predictCommentChange(c.id, input.value.trim())); });
     input.focus();
   }
 
@@ -1053,19 +1195,19 @@
     go.then(function (yes) {
       if (!yes) return;
       S.justApplied = ev.id;
-      act('apply', { eventId: ev.id, kind: kind }, function (data) {
+      actFast('apply', { eventId: ev.id, kind: kind }, function (data) {
         var now = findEvent(data, ev.id);
         if (!now || !now.my) return '신청했어요';
         if (now.my.kind === '연습') return '연습으로 신청했어요';
         return now.my.waiting ? '대기 ' + now.my.no + '번으로 신청했어요' : now.my.late ? '급참으로 참석 확정이에요' : '참석 확정이에요';
-      }).then(function () { S.justApplied = ''; });
+      }, predictApply(ev.id, kind)).then(function () { S.justApplied = ''; });
     });
   }
 
   function cancel(ev) {
     var practice = ev.my && ev.my.kind === '연습';
     ask({ title: practice ? '연습 신청을 취소할까요?' : '신청을 취소할까요?', text: dayLabel(ev.date) + '\n' + ev.title, ok: practice ? '연습 취소' : '신청 취소', danger: true })
-      .then(function (yes) { if (yes) act('cancel', { eventId: ev.id }, practice ? '연습 신청을 취소했어요' : '신청을 취소했어요'); });
+      .then(function (yes) { if (yes) actFast('cancel', { eventId: ev.id }, practice ? '연습 신청을 취소했어요' : '신청을 취소했어요', predictCancel(ev.id)); });
   }
 
   function guestAdd(ev, d) {
@@ -1193,7 +1335,7 @@
           if (x[0] === 'mvp' && x[1].checked !== !!a.myVote) { key.mvp = x[1].checked; changed = true; }
         });
         if (!changed) return;
-        staffCall('attendMark', key, a.name + ' 님 표시를 저장했어요');
+        actFast('attendMark', key, a.name + ' 님 표시를 저장했어요', predictMark(ev.id, a, key), true);
       });
   }
 
@@ -1522,7 +1664,7 @@
       }),
       r.mine ? h('p', { class: 'fine', style: 'margin:10px 0 0' }, h('button', { class: 'linkbtn', type: 'button', text: '내 표 거두기', onclick: function () {
         var open = body.closest('.veil'); if (open) open.remove();
-        act('mvpVote', { eventId: r.eventId, ref: '' }, '표를 거뒀어요');
+        actFast('mvpVote', { eventId: r.eventId, ref: '' }, '표를 거뒀어요', predictVote(r.eventId, ''));
       } })) : null);
     ask({ title: '🏆 MVP 투표', text: dayLabel(r.date) + '  ' + r.title, body: body, ok: '투표',
       check: function () { if (radios.some(function (x) { return x.box.checked; })) return true; toast('한 명을 골라 주세요.'); return false; } })
@@ -1530,7 +1672,8 @@
         if (!yes) return;
         var pick = radios.filter(function (x) { return x.box.checked; })[0];
         if (!pick || pick.ref === r.mine) return;
-        act('mvpVote', { eventId: r.eventId, ref: pick.ref }, 'MVP 투표했어요');
+        var pickName = (r.candidates.filter(function (c) { return c.ref === pick.ref; })[0] || {}).name || '';
+        actFast('mvpVote', { eventId: r.eventId, ref: pick.ref }, 'MVP 투표했어요', pickName ? predictVote(r.eventId, pickName) : null);
       });
   }
 

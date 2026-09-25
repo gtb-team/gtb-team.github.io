@@ -162,6 +162,14 @@
   .addname { display: flex; gap: 6px; margin-top: 10px; }
   .addname input { flex: 1; min-width: 0; min-height: 42px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; font-family: inherit; background: var(--paper); color: var(--ink); }
   .pool .ns { color: var(--sun); font-size: 12px; margin-left: 3px; }
+  .dep { border-top: 1px solid var(--line); padding: 10px 0; }
+  .dep__top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .dep__who { font-weight: 800; }
+  .dep__amt { font: 700 16px/1 var(--num); white-space: nowrap; }
+  .dep__sub { margin: 3px 0 6px; font-size: 13px; color: var(--ink-2); }
+  .dep__act { display: flex; gap: 6px; }
+  .dep__act .btn { width: auto; min-height: 36px; padding: 0 12px; font-size: 13px; }
+  .dep-ok { color: var(--go); font-weight: 800; }
   .capsel { display: grid; grid-template-columns: 56px 1fr; gap: 8px 10px; align-items: center; margin: 10px 0; }
   .capsel select { min-height: 42px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 15px; font-family: inherit; color: var(--ink); }
   .tel a { flex: none; color: var(--sat); font: 700 19px/1 var(--num); letter-spacing: 0.02em; text-decoration: none; }
@@ -314,7 +322,7 @@
   var CAME_BACK = false;                       // 카카오 로그인에서 방금 돌아온 접속인지
   var DOW = ['일', '월', '화', '수', '목', '금', '토'];
   var app = document.getElementById('app');
-  var S = { token: '', data: null, tab: 'events', justApplied: '', form: null, editName: false, recent: null, view: 'main', fee: null, feePick: null, drafts: {}, asMember: false, contacts: {}, draft: null, draftTimer: null, capPick: {},
+  var S = { token: '', data: null, tab: 'events', justApplied: '', form: null, editName: false, recent: null, view: 'main', fee: null, feePick: null, drafts: {}, asMember: false, contacts: {}, dep: null, gadm: null, draft: null, draftTimer: null, capPick: {},
     range: null, loadingMore: false, scroll: { mode: 'anchor' } };
   var memToken = '';
 
@@ -365,6 +373,7 @@
   function keepRange(data) {
     var prev = S.range;
     S.data = data;
+    S.fetchedDay = kstToday();                                 // 이 화면을 받은 날(한국 시각). 자정을 넘기면 옛 화면이다
     if (data && data.ver && data.ver > (S.maxVer || 0)) S.maxVer = data.ver;
     if (data && data.stage === 'ready') {
       var wide = !!(prev && prev.widened && prev.from === data.from && prev.to === data.to);   // 위·아래로 넓힌 목록은 기억해 두지 않는다
@@ -501,6 +510,24 @@
         else reject(res || { code: 'SERVER', message: '응답을 받지 못했어요.' });
       }, function (e) { reject(e && e.code ? e : offline); });
     });
+  }
+
+  /** 기기 시계로 본 오늘 날짜(한국 시각). 시험에서는 __clockSkew 로 시계를 움직인다 */
+  function kstToday() {
+    var t = new Date(Date.now() + (window.__clockSkew || 0));
+    try {
+      var p = {};
+      new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(t).forEach(function (x) { p[x.type] = x.value; });
+      return p.year + '-' + p.month + '-' + p.day;
+    } catch (e) { return new Date(t.getTime() + 9 * 3600000).toISOString().slice(0, 10); }
+  }
+  /** 화면을 받은 뒤 날짜가 바뀌었는지(자정을 넘겨 급참·취소 가능 여부가 달라졌을 수 있음) */
+  function dayChanged() { return !!(S.fetchedDay && S.fetchedDay !== kstToday()); }
+  /** 날짜가 바뀌었으면 새로 불러온 뒤 fn(새 화면 기준)을 부른다 */
+  function freshThen(fn) {
+    if (!dayChanged()) { fn(false); return; }
+    toast('날짜가 바뀌어서 새로 불러왔어요');
+    load(true).then(function () { fn(true); });
   }
 
   /** Cloudflare 에 읽기만 묻는다. 4초 안에 답이 없거나 처리할 수 없다고 하면 실패(→ Apps Script 로) */
@@ -1002,7 +1029,7 @@
     var ul = h('ul', { class: 'names' });
     list.forEach(function (a, i) {
       var parts = [h('span', { class: 'no', text: String(i + 1) }), a.name + (a.me && a.kind !== '게스트' ? ' (나)' : '')];
-      if (a.kind === '게스트') parts.push(h('span', { class: 'by', text: '게스트, ' + a.by + ' 등록' + (ev.guestPending && where === 'confirmed' ? ', 전날 ' + d.guestCutoff + '에 확정' : '') }));
+      if (a.kind === '게스트') parts.push(h('span', { class: 'by', text: a.direct ? '게스트(게스트 방 신청·입금 완료)' : '게스트, ' + a.by + ' 등록' + (ev.guestPending && where === 'confirmed' ? ', 전날 ' + d.guestCutoff + '에 확정' : '') }));
       if (a.late) parts.push(h('span', { class: 'tagx tagx--late', text: '급참' }));
       if (a.staff) parts.push(h('span', { class: 'tagx tagx--staff', text: '운영진 등록' }));
       if (a.mark === '노쇼') parts.push(h('span', { class: 'tagx tagx--no', text: '노쇼' }));
@@ -1188,6 +1215,16 @@
   }
 
   function apply(ev, kind) {
+    if (dayChanged()) {                                   // 자정을 넘긴 옛 화면: 새로 불러와 오늘 기준(급참 여부)으로 다시 판단
+      freshThen(function () {
+        var e2 = findEvent(S.data, ev.id);
+        if (!e2) return;
+        if (e2.my) return;                                  // 이미 신청돼 있음
+        if (!e2.open) { toast('신청이 마감됐어요.'); return; }
+        apply(e2, kind);
+      });
+      return;
+    }
     var practice = kind === '연습';
     var go = ev.isToday && !(ev.full && !practice)
       ? ask({ title: practice ? '오늘 모임에 연습으로 급참할까요?' : '오늘 모임에 급참할까요?', text: '급참비 ' + won(S.data.lateFee) + '이 추가되고, 신청하면 취소할 수 없어요.', ok: practice ? '연습 급참' : '급참 신청' })
@@ -1205,12 +1242,21 @@
   }
 
   function cancel(ev) {
+    if (dayChanged()) {
+      freshThen(function () {
+        var e2 = findEvent(S.data, ev.id);
+        if (e2 && e2.my && e2.my.canCancel) cancel(e2);
+        else if (e2 && e2.my) toast('모임 당일이라 취소할 수 없어요. 사정이 생기면 운영진에게 알려 주세요.');
+      });
+      return;
+    }
     var practice = ev.my && ev.my.kind === '연습';
     ask({ title: practice ? '연습 신청을 취소할까요?' : '신청을 취소할까요?', text: dayLabel(ev.date) + '\n' + ev.title, ok: practice ? '연습 취소' : '신청 취소', danger: true })
       .then(function (yes) { if (yes) actFast('cancel', { eventId: ev.id }, practice ? '연습 신청을 취소했어요' : '신청을 취소했어요', predictCancel(ev.id)); });
   }
 
   function guestAdd(ev, d) {
+    if (dayChanged()) { freshThen(function () { var e2 = findEvent(S.data, ev.id); if (e2 && e2.open) guestAdd(e2, S.data); else if (e2) toast('신청이 마감됐어요.'); }); return; }
     var input = h('input', { type: 'text', maxlength: '20', autocomplete: 'off', placeholder: '예: 홍길동' });
     var text = '명단에 "게스트 이름 (게스트, ' + d.me.nickname + ' 등록)"으로 표시되고 정원에 포함돼요.'
       + (ev.full ? '\n지금은 정원이 차서 대기로 들어가요.' : '')
@@ -1227,6 +1273,7 @@
   }
 
   function guestCancel(ev, g) {
+    if (dayChanged()) { freshThen(function () { toast('날짜가 바뀌었어요. 게스트 취소가 가능하면 다시 눌러 주세요.'); }); return; }
     ask({ title: '게스트 ' + g.name + ' 님의 신청을 취소할까요?', text: dayLabel(ev.date) + '\n' + ev.title, ok: '게스트 취소', danger: true })
       .then(function (yes) { if (yes) act('guestCancel', { eventId: ev.id, name: g.name }, '게스트 신청을 취소했어요'); });
   }
@@ -1257,7 +1304,7 @@
   function entryMenu(ev, a, where) {
     var d = S.data, staff = d.me.isStaff, isGuest = a.kind === '게스트';
     var nameEl = h('div', { class: 'who__name', text: a.name + (isGuest ? ' (게스트)' : where === 'practice' ? ' (연습)' : '') });
-    var subText = isGuest ? a.by + ' 님이 등록' : a.staff ? a.staff + ' 님이 운영진 권한으로 등록' : '';
+    var subText = isGuest ? (a.direct ? '게스트 방에서 직접 신청(입금 완료)' : a.by + ' 님이 등록') : a.staff ? a.staff + ' 님이 운영진 권한으로 등록' : '';
     var who = h('div', { class: 'who' }, h('div', null, nameEl, subText ? h('span', { class: 'who__sub', text: subText }) : null),
       d.contactsOpen && !isGuest ? h('small', { text: '연락처 확인 중…' }) : null);
     var boxes = [], body = h('div', null, who), mark = null;
@@ -1387,7 +1434,7 @@
         var box = h('input', { type: 'checkbox', checked: where === 'waiting' ? a.mark === '참석' : a.mark === '노쇼' });
         picks.push({ a: a, where: where, box: box });
         return h('label', { class: 'pick' }, box, h('span', null, (i + 1) + '. ' + a.name,
-          a.kind === '게스트' ? h('small', { text: '  게스트, ' + a.by + ' 등록' }) : null, a.late ? h('small', { text: '  급참' }) : null));
+          a.kind === '게스트' ? h('small', { text: a.direct || !a.by ? '  게스트(직접 신청)' : '  게스트, ' + a.by + ' 등록' }) : null, a.late ? h('small', { text: '  급참' }) : null));
       });
     }
     // 자유투 꼴찌(음료수 당번): 회원 중 최대 3명
@@ -1464,7 +1511,7 @@
     var preview = h('section', { class: 'panel' }, h('h2', { text: '회원 화면 미리보기' }),
       h('p', { text: '일반 회원에게 어떻게 보이는지 확인해요. 미리보기 동안은 운영진 권한도 꺼지므로 실제 회원과 똑같이 동작합니다. 위쪽 노란 띠의 [운영진 화면으로]로 돌아옵니다.' }),
       h('button', { class: 'btn btn--ghost', type: 'button', text: '회원 화면으로 보기', onclick: function () { S.asMember = true; S.tab = 'events'; S.scroll = { mode: 'anchor' }; load(); } }));
-    return [pending, recentView(d), billView(d), fillView(), preview, create, help];
+    return [pending, recentView(d), guestAdminView(), depositView(), billView(d), fillView(), preview, create, help];
   }
 
   /* ---------- 운영진: 출석 체크(지난 모임) ---------- */
@@ -1510,6 +1557,118 @@
     return h('section', { class: 'panel' }, h('h2', { text: '연락처·년생 명부 연결' }),
       h('p', { text: '회원 명부에서 대화명과 같은 이름을 찾아 [회원] 시트의 연락처·년생 칸을 명부와 연결해요. 연결된 칸은 명부가 바뀌면 저절로 바뀌고, 그 칸에 값을 직접 적으면 그 칸만 연결이 끊겨 적은 값이 쓰입니다. 새로 등록하는 회원은 자동으로 연결돼요.' }),
       h('button', { class: 'btn btn--ghost', type: 'button', text: '명부와 연결하기', onclick: run }));
+  }
+
+  /* ---------- 운영진: 게스트 방 직접 신청 ---------- */
+  function guestAdminView() {
+    var box = h('section', { class: 'panel' }, h('h2', { text: '게스트 직접 신청' }));
+    function send(payload, msg) {
+      if (document.body.classList.contains('is-busy')) return;
+      setBusy(true);
+      call(payload ? 'guestAdminAct' : 'guestAdmin', payload || {}).then(function (r) { setBusy(false); S.gadm = r; render(); if (msg) toast(msg); },
+        function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '처리하지 못했어요.'); });
+    }
+    if (!S.gadm) {
+      box.appendChild(h('p', { text: '게스트 방에서 비회원이 직접 신청한 내역이에요(내일 모임만, 입금 확인 후 참석 확정). 게스트 페이지 주소: https://gtb-team.github.io/guest.html' }));
+      box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', text: '게스트 신청 보기', onclick: function () { send(); } }));
+      return box;
+    }
+    var r = S.gadm, av = r.avail;
+    if (av) box.appendChild(h('p', { class: 'fine', style: 'margin:0 0 8px', text: dayLabel(av.date) + ' ' + av.title + ' · 게스트 신청 ' + (av.open ? '열림' : '닫힘(' + av.reason + ')') + ' · 회원 ' + av.members + '명 · 게스트 ' + av.guests + '명 · 입금 대기 ' + av.pending + '건' }));
+    if (!r.apps.length) box.appendChild(h('p', { class: 'fine', text: '신청이 없어요.' }));
+    r.apps.forEach(function (a) {
+      var btns = [];
+      if (a.status === '입금대기' || a.status === '만료') btns.push(h('button', { class: 'btn', type: 'button', text: '입금 확인', onclick: function () {
+        ask({ title: a.name + ' 입금 확인', text: won(r.fee) + ' 입금을 직접 확인했으면 참석을 확정해요. 정원이 찼으면 정원 외로 넣어요.', ok: '참석 확정' }).then(function (yes) { if (yes) send({ id: a.id, op: 'confirm' }, '확정했어요'); });
+      } }));
+      if (a.status === '입금대기' || a.status === '만료' || a.status === '확정') btns.push(h('button', { class: 'btn btn--ghost', type: 'button', text: '취소', onclick: function () {
+        ask({ title: a.name + ' 신청 취소', text: a.status === '확정' ? '명단에서 빼고 "환불필요"로 표시해요.' : '입금 전 신청을 취소해요.', ok: '취소', danger: true }).then(function (yes) { if (yes) send({ id: a.id, op: 'cancel' }, '취소했어요'); });
+      } }));
+      if (a.status === '환불필요') btns.push(h('button', { class: 'btn btn--ghost', type: 'button', text: '환불 완료', onclick: function () { send({ id: a.id, op: 'refunded' }, '환불 완료로 표시했어요'); } }));
+      box.appendChild(h('div', { class: 'dep' },
+        h('div', { class: 'dep__top' }, h('span', { class: 'dep__who', text: a.name }), h('span', { class: 'dep__amt', text: a.status + (a.over ? '(정원외)' : '') })),
+        h('p', { class: 'dep__sub', text: a.date.slice(5) + ' 모임 · 신청 ' + a.at.slice(5, 16) + (a.status === '입금대기' ? ' · 입금 기한 ' + a.payBy.slice(11) : '') + (a.paidAt ? ' · 확정 ' + a.paidAt.slice(5, 16) : '') + (a.by ? ' · ' + a.by : '') }),
+        btns.length ? h('div', { class: 'dep__act' }, btns) : null));
+    });
+    box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', style: 'margin-top:10px', text: '새로고침', onclick: function () { send(null, '새로 불러왔어요'); } }));
+    return box;
+  }
+
+  /* ---------- 운영진: 입금 확인(페이액션 메일 자동확인) ---------- */
+  function depositView() {
+    var box = h('section', { class: 'panel' }, h('h2', { text: '입금 확인' }));
+    function load(msg) {
+      if (document.body.classList.contains('is-busy')) return;
+      setBusy(true);
+      call('depositState').then(function (r) { setBusy(false); S.dep = r; render(); if (msg) toast(msg); },
+        function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
+    }
+    function send(action, payload, msg) {
+      if (document.body.classList.contains('is-busy')) return;
+      setBusy(true);
+      call(action, payload).then(function (r) { setBusy(false); S.dep = r; render(); toast(msg); },
+        function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '처리하지 못했어요.'); });
+    }
+    if (!S.dep) {
+      box.appendChild(h('p', { text: '페이액션 알림 메일로 들어온 입금을 월회비 신청과 자동으로 맞춰요. 이름·금액이 맞지 않은 입금은 여기서 직접 연결하거나 "회비 아님"으로 정리합니다.' }));
+      box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', text: '입금 확인 목록 보기', onclick: function () { load(); } }));
+      return box;
+    }
+    var r = S.dep;
+    box.appendChild(h('p', { class: 'fine', style: 'margin:0 0 8px' }, r.on ? '자동확인 켜짐(5분마다)' : '자동확인 꺼짐 — 스프레드시트 [모임관리] > [입금 자동확인] 메뉴에서 켜세요', r.last ? ' · 마지막 확인 ' + r.last : ''));
+    box.appendChild(h('h3', { text: '확인 필요 ' + r.review.length + '건' }));
+    if (!r.review.length) box.appendChild(h('p', { class: 'fine', text: '없어요.' }));
+    r.review.forEach(function (x) {
+      box.appendChild(h('div', { class: 'dep' },
+        h('div', { class: 'dep__top' }, h('span', { class: 'dep__who', text: x.name || '(이름 없음)' }), h('span', { class: 'dep__amt', text: x.amount ? won(x.amount) : '(금액 없음)' })),
+        h('p', { class: 'dep__sub', text: (x.at || x.got).slice(5) + ' · ' + (x.status === '읽지못함' ? '메일을 읽지 못함: ' : '') + (x.reason || '') }),
+        h('div', { class: 'dep__act' },
+          h('button', { class: 'btn', type: 'button', text: '회비에 연결', onclick: function () { linkDeposit(x, r.fees, send); } }),
+          h('button', { class: 'btn btn--ghost', type: 'button', text: '회비 아님', onclick: function () {
+            ask({ title: x.name + ' ' + won(x.amount), text: '회비가 아닌 입금(정산·게스트비·개인 거래 등)으로 정리할까요? 목록에서 빠지고 기록은 [입금내역] 시트에 남아요.', ok: '회비 아님으로 정리' })
+              .then(function (yes) { if (yes) send('depositIgnore', { id: x.id }, '정리했어요'); });
+          } }))));
+    });
+    box.appendChild(h('h3', { style: 'margin-top:14px', text: '최근 확인된 입금' }));
+    if (!r.done.length) box.appendChild(h('p', { class: 'fine', text: '아직 없어요.' }));
+    r.done.forEach(function (x) {
+      box.appendChild(h('div', { class: 'dep' },
+        h('div', { class: 'dep__top' }, h('span', { class: 'dep__who', text: x.name }), h('span', { class: 'dep__amt', text: won(x.amount) })),
+        h('p', { class: 'dep__sub' }, h('span', { class: 'dep-ok', text: x.status === '자동확인' ? '자동확인' : '운영진 연결' }), ' · ' + (x.at || x.got).slice(5) + (x.reason ? ' · ' + x.reason : '')),
+        h('div', { class: 'dep__act' }, h('button', { class: 'btn btn--ghost', type: 'button', text: '되돌리기', onclick: function () {
+          ask({ title: '입금 확인을 되돌릴까요?', text: x.name + ' ' + won(x.amount) + '\n회비 신청의 입금 확인 표시를 지우고 "확인 필요"로 돌려요.', ok: '되돌리기', danger: true })
+            .then(function (yes) { if (yes) send('depositUndo', { id: x.id }, '되돌렸어요'); });
+        } }))));
+    });
+    box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', style: 'margin-top:10px', text: '새로고침', onclick: function () { load('새로 불러왔어요'); } }));
+    return box;
+  }
+
+  /** 확인 필요 입금을 회비 신청(여러 건 가능)에 연결하는 창. 금액·이름이 비슷한 신청을 위로, 합계가 맞으면 알려 준다 */
+  function linkDeposit(x, fees, send) {
+    if (!fees.length) { toast('입금 확인 전인 회비 신청이 없어요.'); return; }
+    var nm = String(x.name || '').replace(/[^가-힣A-Za-z]/g, '');
+    var score = function (f) { return (f.amount === x.amount ? 2 : 0) + (nm && f.name && (f.name.indexOf(nm.slice(0, 2)) >= 0 || nm.indexOf(f.name) >= 0) ? 1 : 0); };
+    var list = fees.slice().sort(function (a, b) { return score(b) - score(a); });
+    var boxes = [];
+    var sum = h('p', { class: 'fine', style: 'margin:8px 0 0' });
+    var upd = function () {
+      var t = boxes.filter(function (b) { return b.c.checked; }).reduce(function (n, b) { return n + b.f.amount; }, 0);
+      sum.textContent = '고른 신청 합계 ' + won(t) + (t === x.amount ? ' · 입금액과 같아요' : t ? ' · 입금액 ' + won(x.amount) + '과 달라요' : '');
+    };
+    var body = h('div', { style: 'max-height:50vh;overflow:auto' }, list.map(function (f) {
+      var c = h('input', { type: 'checkbox' });
+      c.addEventListener('change', upd);
+      boxes.push({ c: c, f: f });
+      return h('label', { class: 'pick' }, c, h('span', { text: f.label + ' · ' + (f.guest ? f.month.slice(5).replace('-', '/') + ' 모임' : Number(f.month.slice(5, 7)) + '월') + ' · ' + won(f.amount) + (score(f) >= 2 ? '  ★' : '') }));
+    }));
+    upd();
+    ask({ title: x.name + ' ' + won(x.amount) + ' 연결', text: '이 입금으로 낸 회비 신청을 고르세요(한 사람이 여러 명 몫을 냈으면 여러 개).', body: h('div', null, body, sum), ok: '연결',
+      check: function () { if (boxes.some(function (b) { return b.c.checked; })) return true; toast('신청을 하나 이상 골라 주세요.'); return false; } })
+      .then(function (yes) {
+        if (!yes) return;
+        send('depositLink', { id: x.id, keys: boxes.filter(function (b) { return b.c.checked; }).map(function (b) { return b.f.key; }) }, '연결했어요');
+      });
   }
 
   /* ---------- 운영진: 월 정산 ---------- */
@@ -1707,6 +1866,12 @@
    *  - 화면이 가려지면 쉬고, 팀 구성이 끝나면 멈춘다.
    *  - 2분 동안 변화가 없으면 8초 간격으로 늦추고, 여러 사람이 같은 순간에 몰리지 않도록 조금씩 어긋나게 한다.
    */
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { S.hiddenAt = Date.now(); return; }
+    if (!S.data || S.data.stage !== 'ready' || S.view !== 'main' || document.body.classList.contains('is-busy')) return;
+    if (dayChanged() || (S.hiddenAt && Date.now() - S.hiddenAt > 10 * 60 * 1000)) { S.hiddenAt = 0; load(true); }
+  });
+
   function startDraftPolling() {
     stopDraftPolling();
     var idle = 0;
@@ -1884,7 +2049,7 @@
     })));
     if (cur.note) panel.appendChild(h('p', { class: 'note note--warn', text: cur.note }));
     if (cur.mine) {
-      panel.appendChild(h('p', { class: 'note', text: mm + '월 신청 완료: ' + (cur.mine.days.join(', ') || '요일 없음') + ' / ' + won(cur.mine.total) + ' / 입금 ' + (cur.mine.paid ? '했다고 표시' : '전') + ' (' + cur.mine.at.slice(5) + ')\n다시 신청하면 마지막 신청 내용으로 바뀌어요.' }));
+      panel.appendChild(h('p', { class: 'note', text: mm + '월 신청 완료: ' + (cur.mine.days.join(', ') || '요일 없음') + ' / ' + won(cur.mine.total) + ' / ' + (cur.mine.confirmed ? '✓ 입금 확인됨' : '입금 ' + (cur.mine.paid ? '했다고 표시(확인 전)' : '전')) + ' (' + cur.mine.at.slice(5) + ')\n다시 신청하면 마지막 신청 내용으로 바뀌어요.' }));
     }
 
     var p = f.prices, tr = function (a, b) { return h('tr', null, h('td', { text: a }), h('td', { text: b })); };
@@ -1914,7 +2079,7 @@
     else if (plan.weekdays === 3) panel.appendChild(h('p', { class: 'note', text: won(p.week5 - p.week3) + '만 더 내면 평일 전체(월~금)를 지정할 수 있어요.' }));
 
     panel.appendChild(h('h2', { text: '입금 안내' }));
-    panel.appendChild(h('p', { class: 'fine', style: 'white-space:pre-line;margin:0 0 12px', text: '계좌  ' + f.account + '\n입금자명  ' + f.nickname + mm + '회비\n기한  전월 ' + f.deadlineDay + '일까지 신청·입금' }));
+    panel.appendChild(h('p', { class: 'fine', style: 'white-space:pre-line;margin:0 0 12px', text: '계좌  ' + f.account + '\n입금자명  ' + (f.payName || f.nickname) + mm + '  (이름+월, 입금이 자동으로 확인돼요)\n금액  신청한 금액 그대로\n기한  전월 ' + f.deadlineDay + '일까지 신청·입금' }));
     panel.appendChild(h('div', { class: 'seg', role: 'group', 'aria-label': '입금 여부' },
       h('button', { type: 'button', 'aria-pressed': String(pick.paid === true), text: '입금했어요', onclick: function () { pick.paid = true; render(); } }),
       h('button', { type: 'button', 'aria-pressed': String(pick.paid === false), text: '24시간 안에 입금할게요', onclick: function () { pick.paid = false; render(); } })));

@@ -70,6 +70,10 @@
   .bar { position: fixed; top: 0; left: 0; height: 3px; width: 40%; background: var(--sat); animation: bar 1s linear infinite; z-index: 30; }
   @keyframes bar { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
   .is-busy .btn, .is-busy .seg button { pointer-events: none; opacity: .6; }
+  .testbar { background: var(--warn-bg); color: var(--warn); border: 1px dashed var(--warn); border-radius: 14px; padding: 12px 14px; margin: 0 0 12px; font-size: 14px; }
+  .testbar b { display: block; margin-bottom: 2px; }
+  .testbar .row2 { display: flex; gap: 8px; margin-top: 8px; }
+  .testbar .row2 .btn { margin-top: 0; min-height: 40px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -78,10 +82,10 @@
 (function () {
   'use strict';
   var EXEC = 'https://script.google.com/macros/s/AKfycbzkbCqzRywLo0maxraiYh9h9Iv3g5UCAe6EmQGjyapAgN7bxE_dl51A8mNgr9I-FsCB/exec';                                     // 빌드할 때 Apps Script 웹앱 주소가 들어간다
-  var TOKEN_KEY = 'gtb.guest.token', TRIED = 'gtb.guest.autoTried';
+  var TOKEN_KEY = 'gtb.guest.token', TRIED = 'gtb.guest.autoTried', TEST = 'gtb.guest.test';
   var MEMBER_URL = 'https://gtb-team.github.io/';
   var selfUrl = location.origin + location.pathname;
-  var S = { token: '', data: null, form: null, timer: null };
+  var S = { token: '', data: null, form: null, timer: null, test: false };
   var BOOT = null;
 
   /* ---------- 작은 도구들 ---------- */
@@ -154,6 +158,9 @@
   /* ---------- 서버 ---------- */
   function post(action, payload) {
     var offline = { code: 'NETWORK', message: '연결이 고르지 않아요. 잠시 후 다시 시도해 주세요.' };
+    if (S.test && (action === 'boot' || action.indexOf('guest') === 0)) {       // 운영진 시험 모드: 시험 게스트로 요청
+      var p2 = {}; Object.keys(payload || {}).forEach(function (k) { p2[k] = payload[k]; }); p2.test = true; payload = p2;
+    }
     return new Promise(function (resolve, reject) {
       fetch(EXEC, { method: 'POST', credentials: 'omit', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: action, token: S.token || '', data: payload || {} }) })
@@ -180,7 +187,9 @@
   }
 
   /* ---------- 시작·로그인 ---------- */
+  function setTest(on) { S.test = !!on; session(TEST, on ? '1' : '0'); }
   function boot(forceLogin) {
+    S.test = session(TEST) === '1';
     var q = {};
     location.search.replace(/^\?/, '').split('&').forEach(function (kv) { if (!kv) return; var i = kv.indexOf('='); q[decodeURIComponent(kv.slice(0, i < 0 ? kv.length : i))] = decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' ')); });
     if (q.code || q.error) history.replaceState(null, '', selfUrl);
@@ -218,6 +227,18 @@
   function header(who) {
     return h('header', null, h('h1', { text: 'GTB 게스트 신청' }), who ? h('div', { class: 'who' }, who) : null);
   }
+  function testBar(d) {
+    if (!d.test) return null;
+    return h('div', { class: 'testbar', role: 'note' },
+      h('b', { text: '운영진 시험 모드' }),
+      '시험 게스트로 보고 있어요. 자리 기준과 상관없이 신청할 수 있고, 신청·확정은 실제 참석 명단·정원·정산에 들어가지 않아요.',
+      h('div', { class: 'row2' },
+        h('button', { class: 'btn btn--ghost', type: 'button', text: '시험 기록 지우기', onclick: function () {
+          ask({ title: '시험 기록을 지울까요?', text: '시험 게스트 정보와 시험 신청을 모두 지워요. 처음부터 다시 해 볼 수 있어요.', ok: '지우기' })
+            .then(function (yes) { if (yes) { S.form = null; act('guestTestReset', {}, '시험 기록을 지웠어요'); } });
+        } }),
+        h('button', { class: 'btn btn--ghost', type: 'button', text: '시험 끝내기', onclick: function () { setTest(false); S.form = null; refresh(); } })));
+  }
   function render() {
     stopPoll();
     var d = S.data;
@@ -225,7 +246,10 @@
     if (d.stage === 'member') {
       return mount(header(''), h('div', { class: 'card' }, h('h2', { text: 'GTB 회원이시네요' }),
         h('p', { class: 'muted', text: d.memberName + ' 님은 회원이라 게스트 신청 대신 회원 참석신청 페이지를 이용해 주세요.' }),
-        h('a', { class: 'btn', href: MEMBER_URL, style: 'display:flex;align-items:center;justify-content:center;text-decoration:none', text: '회원 참석신청으로 가기' })));
+        h('a', { class: 'btn', href: MEMBER_URL, style: 'display:flex;align-items:center;justify-content:center;text-decoration:none', text: '회원 참석신청으로 가기' }),
+        d.canTest ? h('div', { style: 'margin-top:14px;padding-top:12px;border-top:1px solid var(--line)' },
+          h('p', { class: 'muted', style: 'margin:0', text: '운영진은 시험 게스트로 이 페이지를 직접 써 볼 수 있어요. 시험 신청은 실제 참석 명단·정원·정산에 들어가지 않아요.' }),
+          h('button', { class: 'btn btn--ghost', type: 'button', text: '운영진: 게스트 화면 시험하기', onclick: function () { setTest(true); S.form = null; refresh(); } })) : null));
     }
     if (d.stage === 'blocked') return mount(header(''), h('div', { class: 'card' }, h('h2', { text: '신청할 수 없어요' }), h('p', { class: 'muted', text: '운영진에게 문의해 주세요.' })));
     if (d.stage === 'profile' || S.form) return renderProfile(d);
@@ -249,7 +273,7 @@
       return h('button', { type: 'button', 'aria-pressed': String(f.position === p), text: p, onclick: function () { f.position = p; render(); } });
     }));
     upd();
-    mount(header(me.name ? me.name : ''),
+    mount(header(me.name ? me.name : ''), testBar(d),
       h('div', { class: 'card' },
         h('h2', { text: me.name ? '내 정보 수정' : '처음 한 번, 내 정보를 등록해 주세요' }),
         h('p', { class: 'muted', text: '입력한 정보로 "실명/키/포지션/나이" 이름이 만들어져 참석 명단에 그대로 올라가요. 게스트 방 대화명도 같은 형식으로 맞춰 주세요.' }),
@@ -279,40 +303,41 @@
       return h('div', { class: 'card' },
         h('div', { class: 'row' }, h('h2', { text: when }), h('span', { class: 'pill pill--wait', text: '입금 대기' })),
         h('p', { class: 'big', text: a.payBy.slice(11) + '까지 입금해 주세요' }),
-        h('p', { class: 'muted', text: '자리를 잡아 두었어요(약 ' + left + '분 남음). 입금이 확인되면 이 화면에서 자동으로 "참석 확정"으로 바뀌어요. 보통 몇 분 걸려요.' }),
+        h('p', { class: 'muted', text: '자리를 잡아 두었어요(약 ' + left + '분 남음). 입금이 확인되면 이 화면에서 자동으로 "참석 확정"으로 바뀌어요. 보통 몇 분 걸려요. 시간 안에 입금하지 않으면 신청은 저절로 풀려요.' }),
         payBox(d),
         h('p', { class: 'muted', style: 'margin:10px 0 0', text: '입금자명이 실명과 다르면 자동 확인이 안 될 수 있어요. 그럴 땐 게스트 방에 입금자명을 알려 주세요.' }),
-        h('button', { class: 'btn btn--ghost', type: 'button', text: '새로고침', onclick: function () { refresh(); } }),
-        cancelBtn(a, '신청 취소'));
+        testPayBtn(d, a),
+        h('button', { class: 'btn btn--ghost', type: 'button', text: '새로고침', onclick: function () { refresh(); } }));
     }
     if (a.status === '만료') {
       return h('div', { class: 'card' },
         h('div', { class: 'row' }, h('h2', { text: when }), h('span', { class: 'pill pill--closed', text: '입금 대기 시간 지남' })),
-        h('p', { class: 'muted', text: '입금 확인 전에 대기 시간이 지나 자리 잡기가 풀렸어요. 이미 입금했다면 자리가 있을 때 자동으로 확정되고, 자리가 없으면 운영진이 연락드려요.' }),
+        h('p', { class: 'muted', text: '입금 확인 전에 대기 시간이 지나 자리 잡기가 풀렸어요. 이미 입금했다면 자리가 있을 때 자동으로 확정되고, 자리가 없으면 운영진이 연락드려요. 아직 입금 전이면 아래에서 다시 신청할 수 있어요(자리가 있을 때).' }),
         payBox(d),
-        cancelBtn(a, '신청 취소'));
+        testPayBtn(d, a));
     }
     if (a.status === '확정') {
       return h('div', { class: 'card', style: 'border:2px solid var(--go)' },
         h('div', { class: 'row' }, h('h2', { text: when }), h('span', { class: 'pill pill--open', text: '✓ 참석 확정' })),
         h('p', { class: 'big ok', text: '참석이 확정됐어요' }),
         h('p', { class: 'muted', text: (a.over ? '입금하는 사이 정원이 찼지만 예외로 참석이 허용됐어요. ' : '') + '서울 강남구 도곡로 505 B1 올댓바스켓 · 05:30 시작 · 흰/검 농구복, 수건 필수.' }),
-        a.canCancel ? cancelBtn(a, '참석 취소 (전날 ' + d.rules.cancelClose + '까지)')
-          : h('p', { class: 'muted', style: 'margin:10px 0 0', text: '전날 ' + d.rules.cancelClose + ' 이후에는 취소할 수 없어요(노쇼 환불 불가).' }));
+        h('p', { class: 'muted', style: 'margin:10px 0 0', text: '입금 후에는 취소·환불이 안 돼요(노쇼 포함). 인원 부족으로 시합을 못 하면 운영진이 환불해 드려요.' }));
     }
     if (a.status === '환불필요') {
       return h('div', { class: 'card' }, h('div', { class: 'row' }, h('h2', { text: when }), h('span', { class: 'pill pill--closed', text: '취소됨' })),
-        h('p', { class: 'muted', text: '참석을 취소했어요. 운영진이 확인 후 환불해 드려요.' }));
+        h('p', { class: 'muted', text: '운영진이 참석을 취소했어요. 환불은 운영진이 안내해 드려요.' }));
     }
     return null;
   }
 
-  function cancelBtn(a, label) {
-    if (!a.canCancel) return null;
-    return h('button', { class: 'btn btn--ghost', type: 'button', text: label, onclick: function () {
-      var paid = a.status === '확정';
-      ask({ title: paid ? '참석을 취소할까요?' : '신청을 취소할까요?', text: paid ? '명단에서 빠지고, 운영진이 확인 후 환불해 드려요.' : '아직 입금 전이면 그대로 끝나요. 이미 입금했다면 게스트 방에 알려 주세요.', ok: '취소하기' })
-        .then(function (yes) { if (yes) act('guestSelfCancel', { id: a.id }, '취소했어요'); });
+  /** 운영진 시험: 실제로 입금하지 않고 입금 확인된 것처럼 처리(운영진 메뉴의 [입금 확인]과 같은 동작) */
+  function testPayBtn(d, a) {
+    if (!d.test) return null;
+    return h('button', { class: 'btn', type: 'button', style: 'background:var(--warn);color:#fff', text: '시험: 입금된 것으로 처리', onclick: function () {
+      if (document.body.classList.contains('is-busy')) return;
+      busy(true);
+      post('guestAdminAct', { id: a.id, op: 'confirm' }).then(function () { busy(false); toast('입금 확인된 것으로 처리했어요'); refresh(true); },
+        function (err) { busy(false); if (!authFail(err)) toast(err.message || '처리하지 못했어요.'); });
     } });
   }
 
@@ -326,11 +351,11 @@
       h('div', { class: 'row' }, h('h2', { text: dayLabel(e.date) + ' ' + (e.time || '05:30') }), h('span', { class: 'pill ' + (e.open ? 'pill--open' : 'pill--closed'), text: e.open ? '신청 가능' : '지금은 마감' })),
       h('p', { class: 'muted', style: 'margin:0', text: e.title + ' · ' + count }),
       e.open ? null : h('p', { style: 'margin:10px 0 0;font-weight:700', text: e.reason }),
-      h('button', { class: 'btn', type: 'button', disabled: !e.open, text: e.open ? '참석 신청 (' + won(d.fee) + ')' : '신청할 수 없어요', onclick: function () {
+      h('button', { class: 'btn', type: 'button', disabled: !e.open && !d.test, text: e.open ? '참석 신청 (' + won(d.fee) + ')' : d.test ? '시험 신청 (자리 기준 무시)' : '신청할 수 없어요', onclick: function () {
         ask({ title: '참석 신청할까요?', body: h('div', null,
             h('p', { class: 'muted', style: 'margin:0 0 8px', text: '신청하면 ' + d.rules.payMinutes + '분 동안 자리를 잡아 둬요. 그 안에 아래로 입금해 주세요. 입금이 확인되면 자동으로 참석이 확정돼요.' }),
             payBox(d),
-            h('p', { class: 'muted', style: 'margin:8px 0 0', text: '노쇼 환불 불가 · 전날 ' + d.rules.cancelClose + ' 이후 취소 불가' })),
+            h('p', { class: 'muted', style: 'margin:8px 0 0;font-weight:700', text: '입금 후에는 취소·환불이 안 돼요(노쇼 포함).' })),
           ok: '신청하고 입금하기' })
           .then(function (yes) { if (yes) act('guestApply', { eventId: e.id }, '자리를 잡았어요. 입금해 주세요'); });
       } }),
@@ -340,7 +365,7 @@
   function renderMain(d) {
     var who = h('span', null, d.me.name, ' · ', h('button', { class: 'linkbtn', type: 'button', text: '정보 수정', onclick: function () { S.form = null; S.form = { realName: d.me.realName, height: String(d.me.height), position: d.me.position, age: String(d.me.age) }; render(); } }));
     var cards = (d.apps || []).map(function (a) { return appCard(d, a); });
-    mount(header(who), cards, eventCard(d),
+    mount(header(who), testBar(d), cards, eventCard(d),
       h('div', { class: 'card' }, h('details', null, h('summary', { text: '게스트 안내 (필독)' }), h('div', { class: 'notice', style: 'margin-top:8px' }, linkify(d.notice)))),
       h('p', { class: 'muted', style: 'text-align:center' }, h('button', { class: 'linkbtn', type: 'button', text: '로그아웃', onclick: function () { store(null); S.token = ''; S.data = null; session(TRIED, '1'); boot(true); } })));
     if ((d.apps || []).some(function (a) { return a.status === '입금대기' || a.status === '만료'; })) startPoll();

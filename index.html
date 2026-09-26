@@ -171,6 +171,11 @@
   .prof--head button { width: 100%; min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: none; font-weight: 800; font-size: 13px; }
   .prof--head button[aria-pressed="true"] { border: 2px solid var(--ink); }
   .team__stat { margin: 2px 0 6px; font-size: 12px; color: var(--ink-2); }
+  .adjust { margin: 0 0 10px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+  .adjust summary { cursor: pointer; font-weight: 800; }
+  .adjust .pick { padding: 6px 0; }
+  .adjust .tag { font-size: 12px; color: var(--ink-2); margin-left: 4px; }
+  .adjust .tag--warn { color: var(--sun); font-weight: 700; }
   .dep { border-top: 1px solid var(--line); padding: 10px 0; }
   .dep__top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .dep__who { font-weight: 800; }
@@ -1576,13 +1581,14 @@
       box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', text: '선수 정보 불러오기', onclick: function () {
         if (document.body.classList.contains('is-busy')) return;
         setBusy(true);
-        call('profileList').then(function (r) { setBusy(false); S.prof = { rows: r.rows, missing: r.missing, cols: r.cols, sort: 'name', dir: 1, edit: {} }; render(); },
+        call('profileList').then(function (r) { setBusy(false); S.prof = { rows: r.rows, missing: r.missing, cols: r.cols, guests: r.guests, sort: 'name', dir: 1, edit: {}, gedit: {} }; render(); },
           function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
       } }));
       return box;
     }
     var P = S.prof;
-    var val = function (row, k) { return P.edit[row.id] && (k in P.edit[row.id]) ? P.edit[row.id][k] : (row[k] ? String(row[k]) : ''); };
+    P.gedit = P.gedit || {};
+    var val = function (row, k) { var e = row.id ? P.edit[row.id] : P.gedit[row.name]; return e && (k in e) ? e[k] : (row[k] ? String(row[k]) : ''); };
     var num = function (v) { var n = Number(String(v).split('/')[0]); return isFinite(n) && n ? n : 0; };
     var sorted = P.rows.slice().sort(function (a, b) {
       if (P.sort === 'name') return a.name.localeCompare(b.name, 'ko') * P.dir;
@@ -1590,7 +1596,8 @@
       if (!x && y) return 1; if (x && !y) return -1;                                  // 빈 값은 항상 아래
       return (x - y) * P.dir || a.name.localeCompare(b.name, 'ko');
     });
-    var changed = Object.keys(P.edit).filter(function (id) { var e = P.edit[id], r = P.rows.filter(function (x) { return x.id === id; })[0]; return r && ['pos', 'skill', 'height'].some(function (k) { return (k in e) && e[k] !== (r[k] ? String(r[k]) : ''); }); });
+    var changedIds = function (edit, list, key) { return Object.keys(edit).filter(function (id) { var e = edit[id], r = list.filter(function (x) { return x[key] === id; })[0]; return r && ['pos', 'skill', 'height'].some(function (k) { return (k in e) && e[k] !== (r[k] ? String(r[k]) : ''); }); }); };
+    var changed = changedIds(P.edit, P.rows, 'id').concat(changedIds(P.gedit, P.guests || [], 'name'));
     var sortBtn = function (key, label) {
       return h('button', { type: 'button', 'aria-pressed': P.sort === key ? 'true' : 'false', text: label + (P.sort === key ? (P.dir > 0 ? ' ↑' : ' ↓') : ''), onclick: function () {
         if (P.sort === key) P.dir = -P.dir; else { P.sort = key; P.dir = key === 'name' ? 1 : -1; }
@@ -1600,30 +1607,42 @@
     box.appendChild(h('p', { class: 'fine', style: 'margin:0 0 6px', text: P.rows.length + '명 · 아직 비어 있는 사람 ' + P.missing + '명. 제목을 누르면 정렬(다시 누르면 반대), 칸을 고치고 아래 [저장].'
       + (P.cols ? ' 시트 [회원] 탭 ' + P.cols.pos + '열(포지션)·' + P.cols.skill + '열(실력)·' + P.cols.height + '열(키)을 1행 제목으로 찾아 읽어요.' : '') }));
     box.appendChild(h('div', { class: 'prof prof--head' }, sortBtn('name', '이름'), sortBtn('pos', '포지션'), sortBtn('skill', '실력'), sortBtn('height', '키')));
-    sorted.forEach(function (row) {
+    var rowEl = function (row) {
+      var edit = row.id ? P.edit : P.gedit, key = row.id || row.name;
       var inp = function (k, attrs) {
-        var at = { value: val(row, k), 'aria-label': row.name + ' ' + (k === 'pos' ? '포지션' : k === 'skill' ? '실력' : '키') };
+        var at = { value: val(row, k), 'aria-label': (row.id ? '' : '게스트 ') + row.name + ' ' + (k === 'pos' ? '포지션' : k === 'skill' ? '실력' : '키') };
         Object.keys(attrs).forEach(function (a) { at[a] = attrs[a]; });
         var el = h('input', at);
-        if (P.edit[row.id] && (k in P.edit[row.id]) && P.edit[row.id][k] !== (row[k] ? String(row[k]) : '')) el.classList.add('is-changed');
-        el.addEventListener('input', function () { P.edit[row.id] = P.edit[row.id] || {}; P.edit[row.id][k] = el.value.trim(); el.classList.toggle('is-changed', el.value.trim() !== (row[k] ? String(row[k]) : '')); saveBtn.textContent = '저장 (' + countChanged() + ')'; });
+        if (edit[key] && (k in edit[key]) && edit[key][k] !== (row[k] ? String(row[k]) : '')) el.classList.add('is-changed');
+        el.addEventListener('input', function () { edit[key] = edit[key] || {}; edit[key][k] = el.value.trim(); el.classList.toggle('is-changed', el.value.trim() !== (row[k] ? String(row[k]) : '')); saveBtn.textContent = '저장 (' + countChanged() + ')'; });
         return el;
       };
-      box.appendChild(h('div', { class: 'prof' }, h('span', { class: 'prof__name', text: row.name }),
+      return h('div', { class: 'prof' }, h('span', { class: 'prof__name', text: row.name, title: row.name }),
         inp('pos', { type: 'text', inputmode: 'numeric', placeholder: '1~5', pattern: '[1-5](/[1-5])?' }),
         inp('skill', { type: 'number', inputmode: 'numeric', min: '1', max: '10', placeholder: '1~10' }),
-        inp('height', { type: 'number', inputmode: 'numeric', min: '120', max: '230', placeholder: 'cm' })));
-    });
-    function countChanged() {
-      return Object.keys(P.edit).filter(function (id) { var e = P.edit[id], r = P.rows.filter(function (x) { return x.id === id; })[0]; return r && ['pos', 'skill', 'height'].some(function (k) { return (k in e) && e[k] !== (r[k] ? String(r[k]) : ''); }); }).length;
+        inp('height', { type: 'number', inputmode: 'numeric', min: '120', max: '230', placeholder: 'cm' }));
+    };
+    sorted.forEach(function (row) { box.appendChild(rowEl(row)); });
+    if (P.guests && P.guests.length) {
+      box.appendChild(h('h3', { style: 'margin-top:14px', text: '게스트 ' + P.guests.length + '명' }));
+      box.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: '최근 60일 명단에 나온 게스트와 저장된 게스트예요. 게스트 방 형식 이름(실명/키/포지션/나이)은 키·포지션을 이름에서 미리 채워요. 실력을 적어 두면 다음에 같은 이름이 오면 그대로 써요.' }));
+      var gs = P.guests.slice().sort(function (a, b) {
+        if (P.sort === 'name') return a.name.localeCompare(b.name, 'ko') * P.dir;
+        var x = num(val(a, P.sort)), y = num(val(b, P.sort));
+        if (!x && y) return 1; if (x && !y) return -1;
+        return (x - y) * P.dir || a.name.localeCompare(b.name, 'ko');
+      });
+      gs.forEach(function (row) { box.appendChild(rowEl(row)); });
     }
+    function countChanged() { return changedIds(P.edit, P.rows, 'id').length + changedIds(P.gedit, P.guests || [], 'name').length; }
     var saveBtn = h('button', { class: 'btn', type: 'button', style: 'margin-top:10px', text: '저장 (' + changed.length + ')', onclick: function () {
-      var ids = Object.keys(P.edit).filter(function (id) { var e = P.edit[id], r = P.rows.filter(function (x) { return x.id === id; })[0]; return r && ['pos', 'skill', 'height'].some(function (k) { return (k in e) && e[k] !== (r[k] ? String(r[k]) : ''); }); });
-      if (!ids.length) { toast('바뀐 내용이 없어요.'); return; }
+      var ids = changedIds(P.edit, P.rows, 'id'), gnames = changedIds(P.gedit, P.guests || [], 'name');
+      if (!ids.length && !gnames.length) { toast('바뀐 내용이 없어요.'); return; }
       var rows = ids.map(function (id) { var r = P.rows.filter(function (x) { return x.id === id; })[0]; return { id: id, pos: val(r, 'pos'), skill: val(r, 'skill'), height: val(r, 'height') }; });
+      var guests = gnames.map(function (n) { var r = P.guests.filter(function (x) { return x.name === n; })[0]; return { name: n, pos: val(r, 'pos'), skill: val(r, 'skill'), height: val(r, 'height') }; });
       if (document.body.classList.contains('is-busy')) return;
       setBusy(true);
-      call('profileSave', { rows: rows }).then(function (r) { setBusy(false); S.prof = { rows: r.rows, missing: r.missing, cols: r.cols, sort: P.sort, dir: P.dir, edit: {} }; render(); toast(ids.length + '명 저장했어요'); },
+      call('profileSave', { rows: rows, guests: guests }).then(function (r) { setBusy(false); S.prof = { rows: r.rows, missing: r.missing, cols: r.cols, guests: r.guests, sort: P.sort, dir: P.dir, edit: {}, gedit: {} }; render(); toast((ids.length + gnames.length) + '명 저장했어요'); },
         function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '저장하지 못했어요.'); });
     } });
     box.appendChild(saveBtn);
@@ -1809,9 +1828,27 @@
     }
     results.sort(function (p, q) { return p.cost - q.cost; });
     var best = results[0].cost;
-    var good = results.filter(function (r) { return r.cost <= best + 4; });
-    var fresh = good.filter(function (r) { return !seen[r.key]; });
-    var pool = fresh.length ? fresh : good;
+    // 가장 좋은 것과 비슷하게 좋은 구성 중 아직 안 보여 준 것. 인원이 적어 대안이 없으면 허용 폭을 조금씩 넓힌다
+    var pool = null;
+    [4, 8, 12].forEach(function (tol) {
+      if (pool) return;
+      var fresh = results.filter(function (r) { return r.cost <= best + tol && !seen[r.key]; });
+      if (fresh.length) pool = fresh;
+    });
+    if (!pool) {                                       // 계산이 모두 같은 구성으로 모이면, 가장 좋은 구성에서 두 사람만 맞바꾼 것 중 가장 균형이 좋은 것을 낸다
+      var base = results[0].teams, cands = [];
+      for (var v = 0; v < 60; v++) {
+        var ta = Math.floor(Math.random() * n), tb = Math.floor(Math.random() * n);
+        if (ta === tb || !base[ta].length || !base[tb].length) continue;
+        var ia = Math.floor(Math.random() * base[ta].length), ib = Math.floor(Math.random() * base[tb].length);
+        var alt = base.map(function (t) { return t.slice(); });
+        var sw = alt[ta][ia]; alt[ta][ia] = alt[tb][ib]; alt[tb][ib] = sw;
+        var key = teamKey(alt);
+        if (!seen[key] && !cands.some(function (c) { return c.key === key; })) cands.push({ cost: teamCost(alt, info), teams: alt, key: key });
+      }
+      cands.sort(function (p, q) { return p.cost - q.cost; });
+      pool = cands.length ? cands.slice(0, 3) : results.slice(0, 1);
+    }
     return pool[Math.floor(Math.random() * pool.length)];
   }
   /** 팀 안 표시 순서(운영진 편집 화면): 포지션 5→1, 같은 포지션은 실력 높은 순, 정보 없는 사람·직접 적은 이름은 뒤. 저장할 때 서버도 같은 순서로 맞춘다 */
@@ -1837,8 +1874,10 @@
     }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
   }
   function teamStateFrom(r) {
-    var t = { r: r, mode: r.saved ? r.saved.mode : 3, teams: { '검정': [], '흰색': [], '주황': [] }, active: '검정', editing: !r.saved };
+    var t = { r: r, mode: r.saved ? r.saved.mode : 3, teams: { '검정': [], '흰색': [], '주황': [] }, active: '검정', editing: !r.saved, sel: {} };
     if (r.saved) TEAM_COLORS.forEach(function (c) { t.teams[c] = (r.saved.teams[c] || []).map(function (x) { return { ref: x.ref || '', name: x.name }; }); });
+    r.players.forEach(function (p) { t.sel[p.ref] = !!p.base; });                     // 기본: 연습·노쇼 빼고, 대기는 나왔다고 표시된 사람만
+    TEAM_COLORS.forEach(function (c) { t.teams[c].forEach(function (x) { if (x.ref) t.sel[x.ref] = true; } ); });   // 저장된 팀에 있는 사람은 포함
     return t;
   }
   function closeTeams() { S.view = 'main'; S.team = null; S.scroll = { mode: 'anchor' }; load(); }
@@ -1862,7 +1901,7 @@
         return h('div', { class: 'team' }, h('p', { class: 'team__name' }, dot(c), c + ' ' + T.teams[c].length + '명'),
           h('ol', null, T.teams[c].map(function (x) { return h('li', { text: x.name }); })));
       })));
-      var left = r.players.filter(function (p) { return !assigned[p.ref]; });
+      var left = r.players.filter(function (p) { return p.base && !assigned[p.ref]; });
       if (left.length) panel.appendChild(h('p', { class: 'fine', text: '팀에 안 들어간 참석자: ' + left.map(function (p) { return p.name; }).join(', ') }));
       panel.appendChild(h('div', { class: 'act', style: 'margin-top:12px' },
         h('button', { class: 'btn', type: 'button', text: '수정하기', onclick: function () { T.editing = true; render(); } }),
@@ -1886,11 +1925,30 @@
       } });
     })));
     panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: '팀을 눌러 고른 뒤, 아래 참석자 이름을 누르면 그 팀에 들어가요. 팀 안의 이름을 누르면 빠져요. 안 넣은 사람이 있어도 괜찮아요.' }));
+    // 팀에 넣을 사람 고르기: 연습·노쇼는 기본으로 빠져 있고, 급참·확정은 들어 있다. 체크를 바꿔 조정
+    var selCount = r.players.filter(function (p) { return T.sel[p.ref]; }).length;
+    panel.appendChild(h('details', { class: 'adjust' },
+      h('summary', { text: '팀 나눌 사람 조정 (' + selCount + '/' + r.players.length + '명)' }),
+      h('p', { class: 'fine', style: 'margin:6px 0', text: '연습 신청과 노쇼는 기본으로 빠져 있고, 급참은 들어 있어요. 체크를 풀면 팀에서도 빠져요. 명단에 없는 사람은 아래 "명단에 없는 이름"으로 넣어요.' }),
+      r.players.map(function (p) {
+        var cb = h('input', { type: 'checkbox', checked: !!T.sel[p.ref], 'aria-label': p.name + ' 팀 나누기에 포함' });
+        cb.addEventListener('change', function () {
+          T.sel[p.ref] = cb.checked;
+          if (!cb.checked) colors.forEach(function (c) { T.teams[c] = T.teams[c].filter(function (x) { return x.ref !== p.ref; }); });
+          render();
+        });
+        var tags = [];
+        if (p.guest) tags.push('게스트');
+        if (p.practice) tags.push('연습');
+        if (p.waiting) tags.push(p.came ? '대기(나옴)' : '대기');
+        if (p.late) tags.push('급참');
+        return h('label', { class: 'pick' }, cb, h('span', null, p.name, tags.length ? h('span', { class: 'tag', text: ' · ' + tags.join(' · ') }) : null, p.noshow ? h('span', { class: 'tag tag--warn', text: ' · 노쇼' }) : null));
+      })));
     if (r.staff) {                                       // 운영진: 실력·포지션·키로 자동 배정
       var info = r.profiles || {};
       colors.forEach(function (c) { T.teams[c] = teamOrder(T.teams[c], info); });   // 포지션 5→1, 실력순으로 보여 준다
       var autoRun = function () {
-        var refs = r.players.filter(function (p) { return p.ref && !p.noshow; }).map(function (p) { return p.ref; });
+        var refs = r.players.filter(function (p) { return p.ref && T.sel[p.ref]; }).map(function (p) { return p.ref; });
         if (refs.length < 2) { toast('나눌 참석자가 2명 이상 있어야 해요.'); return; }
         T.hist = T.hist || []; T.seen = T.seen || {};
         var res = balanceTeams(refs, T.mode, info, T.seen);
@@ -1913,7 +1971,7 @@
         h('button', { class: 'btn btn--ghost', type: 'button', text: '이전 구성', disabled: !(T.hist && T.histIdx > 0), onclick: function () { T.histIdx--; applyAuto(T.hist[T.histIdx]); } }),
         h('button', { class: 'btn btn--ghost', type: 'button', text: '다음 구성', disabled: !(T.hist && T.histIdx < T.hist.length - 1), onclick: function () { T.histIdx++; applyAuto(T.hist[T.histIdx]); } }));
       panel.appendChild(nav);
-      var noInfo = r.players.filter(function (p) { return p.ref && !p.noshow && !info[p.ref]; }).length;
+      var noInfo = r.players.filter(function (p) { return p.ref && T.sel[p.ref] && !info[p.ref]; }).length;
       panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 8px', text: '실력·포지션이 고르게, 그다음 평균 키가 비슷하게 나눠요. 마음에 드는 구성이 나오면 [저장].' + (noInfo ? ' 선수 정보가 없는 ' + noInfo + '명(게스트 등)은 평균으로 보고 계산해요.' : '') + (T.hist && T.hist.length ? ' (' + (T.histIdx + 1) + '/' + T.hist.length + ')' : '') }));
     }
     panel.appendChild(h('div', { class: 'teams' + (T.mode === 2 ? ' teams--2' : '') }, colors.map(function (c) {
@@ -1925,7 +1983,7 @@
           return h('li', null, h('button', { type: 'button', text: x.name, 'aria-label': x.name + ' 빼기', onclick: function () { T.teams[c].splice(i, 1); render(); } }));
         })));
     })));
-    var free = r.players.filter(function (p) { return !assigned[p.ref]; });
+    var free = r.players.filter(function (p) { return T.sel[p.ref] && !assigned[p.ref]; });
     panel.appendChild(h('h2', { text: '안 나눈 참석자 ' + free.length + '명' }));
     panel.appendChild(h('ul', { class: 'pool' }, free.map(function (p) {
       return h('li', null, h('button', { type: 'button', 'aria-label': p.name + '을(를) ' + T.active + ' 팀에', onclick: function () { T.teams[T.active].push({ ref: p.ref, name: p.name }); render(); } },

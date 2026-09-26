@@ -1576,7 +1576,7 @@
       box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', text: '선수 정보 불러오기', onclick: function () {
         if (document.body.classList.contains('is-busy')) return;
         setBusy(true);
-        call('profileList').then(function (r) { setBusy(false); S.prof = { rows: r.rows, missing: r.missing, sort: 'name', dir: 1, edit: {} }; render(); },
+        call('profileList').then(function (r) { setBusy(false); S.prof = { rows: r.rows, missing: r.missing, cols: r.cols, sort: 'name', dir: 1, edit: {} }; render(); },
           function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
       } }));
       return box;
@@ -1597,7 +1597,8 @@
         render();
       } });
     };
-    box.appendChild(h('p', { class: 'fine', style: 'margin:0 0 6px', text: P.rows.length + '명 · 아직 비어 있는 사람 ' + P.missing + '명. 제목을 누르면 정렬(다시 누르면 반대), 칸을 고치고 아래 [저장].' }));
+    box.appendChild(h('p', { class: 'fine', style: 'margin:0 0 6px', text: P.rows.length + '명 · 아직 비어 있는 사람 ' + P.missing + '명. 제목을 누르면 정렬(다시 누르면 반대), 칸을 고치고 아래 [저장].'
+      + (P.cols ? ' 시트 [회원] 탭 ' + P.cols.pos + '열(포지션)·' + P.cols.skill + '열(실력)·' + P.cols.height + '열(키)을 1행 제목으로 찾아 읽어요.' : '') }));
     box.appendChild(h('div', { class: 'prof prof--head' }, sortBtn('name', '이름'), sortBtn('pos', '포지션'), sortBtn('skill', '실력'), sortBtn('height', '키')));
     sorted.forEach(function (row) {
       var inp = function (k, attrs) {
@@ -1622,7 +1623,7 @@
       var rows = ids.map(function (id) { var r = P.rows.filter(function (x) { return x.id === id; })[0]; return { id: id, pos: val(r, 'pos'), skill: val(r, 'skill'), height: val(r, 'height') }; });
       if (document.body.classList.contains('is-busy')) return;
       setBusy(true);
-      call('profileSave', { rows: rows }).then(function (r) { setBusy(false); S.prof = { rows: r.rows, missing: r.missing, sort: P.sort, dir: P.dir, edit: {} }; render(); toast(ids.length + '명 저장했어요'); },
+      call('profileSave', { rows: rows }).then(function (r) { setBusy(false); S.prof = { rows: r.rows, missing: r.missing, cols: r.cols, sort: P.sort, dir: P.dir, edit: {} }; render(); toast(ids.length + '명 저장했어요'); },
         function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '저장하지 못했어요.'); });
     } });
     box.appendChild(saveBtn);
@@ -1813,16 +1814,17 @@
     var pool = fresh.length ? fresh : good;
     return pool[Math.floor(Math.random() * pool.length)];
   }
+  /** 팀 안 표시 순서(운영진 편집 화면): 포지션 5→1, 같은 포지션은 실력 높은 순, 정보 없는 사람·직접 적은 이름은 뒤. 저장할 때 서버도 같은 순서로 맞춘다 */
+  function teamOrder(list, info) {
+    return list.map(function (x, i) { var q = x.ref && info[x.ref] ? info[x.ref] : {}; return { x: x, i: i, p: q.p || 0, s: q.s || 0 }; })
+      .sort(function (a, b) { return (b.p - a.p) || (b.s - a.s) || (a.i - b.i); })
+      .map(function (e) { return e.x; });
+  }
+  /** 팀 판에 보여 주는 요약은 평균 키만. 실력·포지션은 계산에만 쓰고 화면에 내지 않는다 */
   function teamStatText(refs, info) {
-    var s = 0, hs = 0, hn = 0, n1 = 0, n5 = 0, unknown = 0;
-    refs.forEach(function (ref) {
-      var q = info[ref];
-      if (!q) { unknown++; s += 5; return; }
-      s += q.s || 5; if (!q.s) unknown++;
-      if (q.h) { hs += q.h; hn++; }
-      if (q.p === 1) n1++; if (q.p === 5) n5++;
-    });
-    return '실력 ' + s + (unknown ? '(미입력 ' + unknown + ')' : '') + ' · 키 ' + (hn ? Math.round(hs / hn) : '-') + ' · 1번 ' + n1 + ' · 5번 ' + n5;
+    var hs = 0, hn = 0;
+    refs.forEach(function (ref) { var q = info[ref]; if (q && q.h) { hs += q.h; hn++; } });
+    return hn ? '평균 키 ' + Math.round(hs / hn) : '';
   }
 
   /* ---------- 팀 구성(누구나 나눠서 저장) ---------- */
@@ -1886,6 +1888,7 @@
     panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: '팀을 눌러 고른 뒤, 아래 참석자 이름을 누르면 그 팀에 들어가요. 팀 안의 이름을 누르면 빠져요. 안 넣은 사람이 있어도 괜찮아요.' }));
     if (r.staff) {                                       // 운영진: 실력·포지션·키로 자동 배정
       var info = r.profiles || {};
+      colors.forEach(function (c) { T.teams[c] = teamOrder(T.teams[c], info); });   // 포지션 5→1, 실력순으로 보여 준다
       var autoRun = function () {
         var refs = r.players.filter(function (p) { return p.ref && !p.noshow; }).map(function (p) { return p.ref; });
         if (refs.length < 2) { toast('나눌 참석자가 2명 이상 있어야 해요.'); return; }
@@ -1911,13 +1914,13 @@
         h('button', { class: 'btn btn--ghost', type: 'button', text: '다음 구성', disabled: !(T.hist && T.histIdx < T.hist.length - 1), onclick: function () { T.histIdx++; applyAuto(T.hist[T.histIdx]); } }));
       panel.appendChild(nav);
       var noInfo = r.players.filter(function (p) { return p.ref && !p.noshow && !info[p.ref]; }).length;
-      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 8px', text: '실력 합계와 1번·5번(다음으로 1·2번, 4·5번) 구성이 비슷해지게 먼저 맞추고, 평균 키는 그다음이에요. 마음에 드는 구성이 나오면 [저장].' + (noInfo ? ' 선수 정보가 없는 ' + noInfo + '명은 실력 5·포지션 없음으로 계산해요.' : '') + (T.hist && T.hist.length ? ' (' + (T.histIdx + 1) + '/' + T.hist.length + ')' : '') }));
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 8px', text: '실력·포지션이 고르게, 그다음 평균 키가 비슷하게 나눠요. 마음에 드는 구성이 나오면 [저장].' + (noInfo ? ' 선수 정보가 없는 ' + noInfo + '명(게스트 등)은 평균으로 보고 계산해요.' : '') + (T.hist && T.hist.length ? ' (' + (T.histIdx + 1) + '/' + T.hist.length + ')' : '') }));
     }
     panel.appendChild(h('div', { class: 'teams' + (T.mode === 2 ? ' teams--2' : '') }, colors.map(function (c) {
       return h('div', { class: 'team' + (T.active === c ? ' team--active' : ''), role: 'button', tabindex: '0', 'aria-label': c + ' 팀 고르기', 'aria-pressed': T.active === c ? 'true' : 'false',
           onclick: function (e) { if (e.target.closest('li button')) return; T.active = c; render(); } },
         h('p', { class: 'team__name' }, dot(c), c + ' ' + T.teams[c].length + '명'),
-        r.staff && T.teams[c].length ? h('p', { class: 'team__stat', text: teamStatText(T.teams[c].filter(function (x) { return x.ref; }).map(function (x) { return x.ref; }), r.profiles || {}) }) : null,
+        r.staff && T.teams[c].length && teamStatText(T.teams[c].filter(function (x) { return x.ref; }).map(function (x) { return x.ref; }), r.profiles || {}) ? h('p', { class: 'team__stat', text: teamStatText(T.teams[c].filter(function (x) { return x.ref; }).map(function (x) { return x.ref; }), r.profiles || {}) }) : null,
         h('ol', null, T.teams[c].map(function (x, i) {
           return h('li', null, h('button', { type: 'button', text: x.name, 'aria-label': x.name + ' 빼기', onclick: function () { T.teams[c].splice(i, 1); render(); } }));
         })));

@@ -1860,11 +1860,18 @@
       .sort(function (a, b) { return (b.p - a.p) || (b.s - a.s) || (a.i - b.i); })
       .map(function (e) { return e.x; });
   }
-  /** 팀 판에 보여 주는 요약은 평균 키만. 실력·포지션은 계산에만 쓰고 화면에 내지 않는다 */
+  /** 팀 판 요약(운영진): 평균 키와 평점(실력 평균, 미입력은 5로). 포지션 숫자는 화면에 내지 않는다 */
   function teamStatText(refs, info) {
-    var hs = 0, hn = 0;
-    refs.forEach(function (ref) { var q = info[ref]; if (q && q.h) { hs += q.h; hn++; } });
-    return hn ? '평균 키 ' + Math.round(hs / hn) : '';
+    var hs = 0, hn = 0, ss = 0, sn = 0, unknown = 0;
+    refs.forEach(function (ref) {
+      var q = info[ref] || {};
+      if (q.h) { hs += q.h; hn++; }
+      ss += q.s || 5; sn++; if (!q.s) unknown++;
+    });
+    var parts = [];
+    if (hn) parts.push('평균 키 ' + Math.round(hs / hn));
+    if (sn) parts.push('평점 ' + (Math.round(ss / sn * 10) / 10).toFixed(1) + (unknown ? ' (미입력 ' + unknown + ')' : ''));
+    return parts.join(' · ');
   }
 
   /* ---------- 팀 구성(누구나 나눠서 저장) ---------- */

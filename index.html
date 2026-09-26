@@ -1785,9 +1785,9 @@
         h('button', { class: 'btn btn--ghost', type: 'button', text: thisMonth + ' 정산', onclick: function () { run(thisMonth); } })));
   }
 
-  /* ---------- 팀 구성: 자동 배정(운영진). 실력 합·포지션 구성을 먼저, 평균 키는 그다음 ---------- */
+  /* ---------- 팀 구성: 자동 배정(운영진). 팀 평균 실력·포지션 구성을 먼저, 평균 키는 그다음 ---------- */
   function teamCost(teams, info) {
-    var sums = [], avgH = [], c1 = [], c5 = [], c12 = [], c45 = [];
+    var avgS = [], avgH = [], c1 = [], c5 = [], c12 = [], c45 = [], total = 0;
     teams.forEach(function (t) {
       var s = 0, hs = 0, hn = 0, n1 = 0, n5 = 0, n12 = 0, n45 = 0;
       t.forEach(function (ref) {
@@ -1797,10 +1797,13 @@
         if (q.p === 1) n1++; if (q.p === 5) n5++;
         if (q.p === 1 || q.p === 2) n12++; if (q.p === 4 || q.p === 5) n45++;
       });
-      sums.push(s); avgH.push(hn ? hs / hn : null); c1.push(n1); c5.push(n5); c12.push(n12); c45.push(n45);
+      total += t.length;
+      avgS.push(t.length ? s / t.length : null);            // 팀 인원이 달라도 공평하게: 합계가 아니라 평균
+      avgH.push(hn ? hs / hn : null); c1.push(n1); c5.push(n5); c12.push(n12); c45.push(n45);
     });
     var spread = function (a) { var v = a.filter(function (x) { return x != null; }); return v.length ? Math.max.apply(null, v) - Math.min.apply(null, v) : 0; };
-    return 10 * spread(sums) + 8 * (spread(c1) + spread(c5)) + 4 * (spread(c12) + spread(c45)) + 1 * spread(avgH);
+    var meanSize = teams.length ? total / teams.length : 1;   // 평균 차이 × 팀 인원 ≈ "한 사람 몫" 단위: 포지션·키 가중치와 균형을 유지
+    return 10 * spread(avgS) * meanSize + 8 * (spread(c1) + spread(c5)) + 4 * (spread(c12) + spread(c45)) + 1 * spread(avgH);
   }
   function teamKey(teams) { return teams.map(function (t) { return t.slice().sort().join(','); }).sort().join('|'); }
   /** refs 를 n 팀으로 고르게 나눈다. 무작위 시작 + 맞바꾸기 개선을 여러 번 돌려, 가장 좋은 것과 비슷하게 좋은 구성 중 하나를 고른다(seen 에 있는 것은 피함) */
@@ -1972,7 +1975,7 @@
         h('button', { class: 'btn btn--ghost', type: 'button', text: '다음 구성', disabled: !(T.hist && T.histIdx < T.hist.length - 1), onclick: function () { T.histIdx++; applyAuto(T.hist[T.histIdx]); } }));
       panel.appendChild(nav);
       var noInfo = r.players.filter(function (p) { return p.ref && T.sel[p.ref] && !info[p.ref]; }).length;
-      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 8px', text: '실력·포지션이 고르게, 그다음 평균 키가 비슷하게 나눠요. 마음에 드는 구성이 나오면 [저장].' + (noInfo ? ' 선수 정보가 없는 ' + noInfo + '명(게스트 등)은 평균으로 보고 계산해요.' : '') + (T.hist && T.hist.length ? ' (' + (T.histIdx + 1) + '/' + T.hist.length + ')' : '') }));
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 8px', text: '팀 평균 실력과 포지션이 고르게, 그다음 평균 키가 비슷하게 나눠요. 마음에 드는 구성이 나오면 [저장].' + (noInfo ? ' 선수 정보가 없는 ' + noInfo + '명(게스트 등)은 평균으로 보고 계산해요.' : '') + (T.hist && T.hist.length ? ' (' + (T.histIdx + 1) + '/' + T.hist.length + ')' : '') }));
     }
     panel.appendChild(h('div', { class: 'teams' + (T.mode === 2 ? ' teams--2' : '') }, colors.map(function (c) {
       return h('div', { class: 'team' + (T.active === c ? ' team--active' : ''), role: 'button', tabindex: '0', 'aria-label': c + ' 팀 고르기', 'aria-pressed': T.active === c ? 'true' : 'false',

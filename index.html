@@ -1884,7 +1884,8 @@
     }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
   }
   function teamStateFrom(r) {
-    var t = { r: r, mode: r.saved ? r.saved.mode : 3, teams: { '검정': [], '흰색': [], '주황': [] }, active: '검정', editing: !r.saved, sel: {} };
+    var baseCount = r.players.filter(function (p) { return p.base; }).length;
+    var t = { r: r, mode: r.saved ? r.saved.mode : (baseCount >= 15 ? 3 : 2), teams: { '검정': [], '흰색': [], '주황': [] }, active: '검정', editing: !r.saved, sel: {} };   // 처음 열 때: 팀 나눌 사람이 15명 이상이면 3파전, 아니면 2파전
     if (r.saved) TEAM_COLORS.forEach(function (c) { t.teams[c] = (r.saved.teams[c] || []).map(function (x) { return { ref: x.ref || '', name: x.name }; }); });
     r.players.forEach(function (p) { t.sel[p.ref] = !!p.base; });                     // 기본: 연습·노쇼 빼고, 대기는 나왔다고 표시된 사람만
     TEAM_COLORS.forEach(function (c) { t.teams[c].forEach(function (x) { if (x.ref) t.sel[x.ref] = true; } ); });   // 저장된 팀에 있는 사람은 포함

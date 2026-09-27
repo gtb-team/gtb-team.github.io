@@ -135,8 +135,18 @@
   .leaf__mvp i { display: block; margin-top: 1px; font: 700 12px/1 var(--num); font-style: normal; color: var(--sun); }
   button.leaf__mvp { cursor: pointer; }
   button.leaf__mvp--todo b { color: var(--sat); }
-  .leaf__draft { display: block; width: 100%; padding: 6px 3px 7px; border: 0; border-top: 1px solid var(--line); background: none; font: 800 11px/1.3 inherit; font-family: inherit; color: var(--ink); cursor: pointer; }
+  .leaf__draft { display: block; width: 100%; padding: 6px 3px 7px; border: 0; border-top: 1px solid var(--line); background: none; font-weight: 800; font-size: 11px; line-height: 1.3; font-family: inherit; color: var(--ink); cursor: pointer; }
   .leaf__draft--live { color: #8a5a00; }
+  .leaf__teams { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; width: calc(100% - 12px); margin: 10px 6px 6px; padding: 6px 2px 5px;
+    border: 1.5px solid var(--sat); border-radius: 12px; background: var(--paper); color: var(--sat); font-family: inherit; font-weight: 800; font-size: 12px; line-height: 1.2; cursor: pointer;
+    box-shadow: 0 1px 0 var(--line); transition: transform .08s; }
+  .leaf__teams:active { transform: scale(.96); }
+  .leaf__teams-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .leaf__teams-label { white-space: nowrap; }
+  .leaf__teams .beta { position: absolute; top: -7px; right: -5px; padding: 1px 4px 2px; border-radius: 6px; background: var(--sat); color: #fff; font-family: inherit; font-weight: 700; font-size: 9px; line-height: 1; letter-spacing: .02em; }
+  .leaf__teams--saved { border-color: var(--go); color: var(--go); background: var(--go-bg); }
+  .leaf__teams--saved .beta { background: var(--go); }
+  .leaf__teams--draft { background: var(--note-bg); }
   .leaf__draft--done { color: var(--ink-2); }
   .teams { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
   .team { border: 1px solid var(--line); border-radius: 10px; padding: 8px 8px 10px; min-height: 120px; }
@@ -171,6 +181,10 @@
   .prof--head button { width: 100%; min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: none; font-weight: 800; font-size: 13px; }
   .prof--head button[aria-pressed="true"] { border: 2px solid var(--ink); }
   .team__stat { margin: 2px 0 6px; font-size: 12px; color: var(--ink-2); }
+  .teams-state { display: flex; flex-direction: column; gap: 2px; margin: 0 0 8px; padding: 10px 12px; border-radius: 10px; background: var(--note-bg); font-size: 13px; color: var(--ink-2); }
+  .teams-state b { color: var(--ink); font-size: 15px; }
+  .teams-state--done { background: var(--go-bg); }
+  .teams-state--done b { color: var(--go); }
   .adjust { margin: 0 0 10px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
   .adjust summary { cursor: pointer; font-weight: 800; }
   .adjust .pick { padding: 6px 0; }
@@ -184,6 +198,9 @@
   .dep__act { display: flex; gap: 6px; }
   .dep__act .btn { width: auto; min-height: 36px; padding: 0 12px; font-size: 13px; }
   .dep-ok { color: var(--go); font-weight: 800; }
+  .pick--off { opacity: .55; }
+  .pick--off span { display: flex; flex-direction: column; }
+  .pick__why { font-size: 12px; color: var(--ink-2); font-weight: 400; }
   .capsel { display: grid; grid-template-columns: 56px 1fr; gap: 8px 10px; align-items: center; margin: 10px 0; }
   .capsel select { min-height: 42px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 15px; font-family: inherit; color: var(--ink); }
   .tel a { flex: none; color: var(--sat); font: 700 19px/1 var(--num); letter-spacing: 0.02em; text-decoration: none; }
@@ -996,10 +1013,11 @@
             return h('button', { class: 'leaf__draft' + (e.draft === '진행' ? ' leaf__draft--live' : e.draft === '완료' ? ' leaf__draft--done' : ''), type: 'button', text: label,
               'aria-label': label + ': ' + e.title, onclick: function () { openDraft(e); } });
           }),
-          byDate[date].filter(function (e) { return e.teams; }).map(function (e) {            // 팀 구성: 저장됐으면 보기, 아니면 나누기(오늘·내일 모임)
-            var label = e.teams === '저장됨' ? '팀 구성 보기' : '팀 나누기';
-            return h('button', { class: 'leaf__draft' + (e.teams === '저장됨' ? '' : ' leaf__draft--done'), type: 'button', text: label,
-              'aria-label': label + ': ' + e.title, onclick: function () { openTeams(e); } });
+          byDate[date].filter(function (e) { return e.teams; }).map(function (e) {            // 팀구성: 확정(초록 ✓) · 저장됨(파랑 채움) · 나누기(파랑 테두리). 지난 모임도 저장된 구성이면 보임
+            var done = e.teams === '확정', saved = e.teams === '저장됨';
+            return h('button', { class: 'leaf__teams' + (done ? ' leaf__teams--saved' : saved ? ' leaf__teams--draft' : ''), type: 'button',
+                'aria-label': (done ? '팀구성(확정): ' : saved ? '팀구성(저장됨): ' : '팀구성: ') + e.title, onclick: function () { openTeams(e); } },
+              teamsIcon(), h('span', { class: 'leaf__teams-label' }, '팀구성', done ? ' ✓' : ''), h('span', { class: 'beta', text: 'beta' }));
           }),
           byDate[date].filter(function (e) { return e.mvp; }).map(function (e) {              // MVP: 확정 뒤엔 이름·표, 투표 중엔 투표 버튼
             if (!e.mvp.open) return h('div', { class: 'leaf__mvp', title: 'MVP' }, '🏆 MVP', h('b', { text: e.mvp.name }), h('i', { text: e.mvp.votes + '표' }));
@@ -1050,8 +1068,7 @@
       if (a.mark === '참석' && where === 'waiting') parts.push(h('span', { class: 'tagx tagx--came', text: '나옴' }));
       if (a.ft) parts.push(h('span', { class: 'tagx tagx--ft', text: '🥤 꼴찌' }));
       ul.appendChild(h('li', { class: (a.me ? 'is-me' : '') + (a.bday ? ' is-bday' : '') + (a.pending ? ' is-pending' : '') || null },
-        (d.me.isStaff || ev.canMark || (d.contactsOpen && a.k)) ? h('button', { type: 'button', 'aria-label': a.name + (d.me.isStaff ? ' 운영진 메뉴' : ' 상세'), onclick: function () { entryMenu(ev, a, where); } }, parts)
-                     : h('span', null, parts),
+        h('button', { type: 'button', 'aria-label': a.name + (d.me.isStaff ? ' 운영진 메뉴' : ' 상세'), onclick: function () { entryMenu(ev, a, where); } }, parts),
         a.bday ? h('i', { class: 'plus1', text: '+1', title: '생일 이벤트 +1', 'aria-label': '생일 이벤트 +1' }) : null));
     });
     // 인원수는 위 인원 줄에 있으므로 묶음 제목에는 숫자를 붙이지 않고, 첫 묶음(참석 확정)은 제목 없이 바로 이름이 이어진다
@@ -1322,6 +1339,11 @@
     var who = h('div', { class: 'who' }, h('div', null, nameEl, subText ? h('span', { class: 'who__sub', text: subText }) : null),
       d.contactsOpen && !isGuest ? h('small', { text: '연락처 확인 중…' }) : null);
     var boxes = [], body = h('div', null, who), mark = null;
+    // 지금 할 수 없는 항목은 흐리게 보여 주고 언제 되는지 알려 준다(기능이 있다는 걸 평소에도 알 수 있게)
+    var markWhy = ev.canMark ? '' : !ev.started ? (ev.isPast ? '지난 모임이에요' : '모임 당일 ' + (d.noShowFrom || '05:30') + '부터 체크할 수 있어요') : '운영진이 출결을 확정했어요';
+    var offRow = function (label, why) {
+      return h('label', { class: 'pick pick--off' }, h('input', { type: 'checkbox', disabled: true }), h('span', null, label, h('small', { class: 'pick__why', text: why })));
+    };
     if (ev.canMark) {
       mark = h('input', { type: 'checkbox', checked: where === 'waiting' ? a.mark === '참석' : a.mark === '노쇼' });
       boxes.push(['mark', mark]);
@@ -1332,6 +1354,9 @@
         boxes.push(['ft', ft]);
         body.appendChild(h('label', { class: 'pick' }, ft, h('span', { text: '🥤 자유투 꼴찌 (음료수 당번)' + (!a.ft && ftCount >= 3 ? ' · 이미 3명' : ftCount ? ' · 지금 ' + ftCount + '명' : '') })));
       }
+    } else {
+      body.appendChild(offRow(where === 'waiting' ? '대기였지만 나왔어요 (대기참)' : '안 나왔어요 (노쇼)', markWhy));
+      if (!isGuest) body.appendChild(offRow('🥤 자유투 꼴찌 (음료수 당번)', markWhy));
     }
     if (a.ft) body.appendChild(h('p', { class: 'fine', style: 'margin:6px 0 0' }, h('button', { class: 'linkbtn', type: 'button', text: '🥤 이달 꼴찌 순위 보기', onclick: function () {
       var open = body.closest('.veil'); if (open) open.remove();
@@ -1345,6 +1370,13 @@
       if (mark && where !== 'waiting') mark.addEventListener('change', function () {   // 노쇼로 표시하면 MVP 후보가 아니다
         if (mark.checked) { mv.checked = false; mv.disabled = true; } else mv.disabled = false;
       });
+    } else if (where !== 'waiting' || a.mark === '참석') {
+      var mvWhy = !ev.started ? (ev.isPast ? '지난 모임이에요' : '모임 당일 ' + (d.noShowFrom || '05:30') + '부터 나온 사람끼리 투표해요')
+        : ev.locked ? '투표가 끝났어요' + (ev.mvp && ev.mvp.name ? ' (MVP: ' + ev.mvp.name + ')' : '')
+        : a.me ? '자기 자신에게는 투표할 수 없어요'
+        : !ev.mvpVoter ? '그날 나온 회원만 투표할 수 있어요'
+        : '나온 사람에게만 투표할 수 있어요';
+      body.appendChild(offRow('🏆 MVP로 투표', mvWhy));
     }
     if (staff) {
       body.appendChild(h('p', { class: 'fine', style: 'margin:10px 0 0' }, h('button', { class: 'linkbtn', type: 'button', text: '신청 취소 처리 (운영진 권한)', onclick: function () {
@@ -1785,74 +1817,14 @@
         h('button', { class: 'btn btn--ghost', type: 'button', text: thisMonth + ' 정산', onclick: function () { run(thisMonth); } })));
   }
 
-  /* ---------- 팀 구성: 자동 배정(운영진). 팀 평균 실력·포지션 구성을 먼저, 평균 키는 그다음 ---------- */
-  function teamCost(teams, info) {
-    var avgS = [], avgH = [], c1 = [], c5 = [], c12 = [], c45 = [], total = 0;
-    teams.forEach(function (t) {
-      var s = 0, hs = 0, hn = 0, n1 = 0, n5 = 0, n12 = 0, n45 = 0;
-      t.forEach(function (ref) {
-        var q = info[ref] || {};
-        s += q.s || 5;
-        if (q.h) { hs += q.h; hn++; }
-        if (q.p === 1) n1++; if (q.p === 5) n5++;
-        if (q.p === 1 || q.p === 2) n12++; if (q.p === 4 || q.p === 5) n45++;
-      });
-      total += t.length;
-      avgS.push(t.length ? s / t.length : null);            // 팀 인원이 달라도 공평하게: 합계가 아니라 평균
-      avgH.push(hn ? hs / hn : null); c1.push(n1); c5.push(n5); c12.push(n12); c45.push(n45);
+  /* ---------- 팀 구성: 자동 구성(누구나). 계산은 서버(teamsAuto)가 하고 명단만 받는다 ---------- */
+  function teamsIcon() {                                     // 날짜 아래 팀구성 버튼의 사람 둘 아이콘
+    var ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('class', 'leaf__teams-ico');
+    [['circle', { cx: 8.5, cy: 8, r: 3.2 }], ['circle', { cx: 16.5, cy: 9, r: 2.7 }], ['path', { d: 'M2.5 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5' }], ['path', { d: 'M14.2 14.3c.7-.4 1.5-.6 2.3-.6 2.8 0 5 1.9 5 4.8' }]].forEach(function (x) {
+      var el = document.createElementNS(ns, x[0]); Object.keys(x[1]).forEach(function (k) { el.setAttribute(k, x[1][k]); }); svg.appendChild(el);
     });
-    var spread = function (a) { var v = a.filter(function (x) { return x != null; }); return v.length ? Math.max.apply(null, v) - Math.min.apply(null, v) : 0; };
-    var meanSize = teams.length ? total / teams.length : 1;   // 평균 차이 × 팀 인원 ≈ "한 사람 몫" 단위: 포지션·키 가중치와 균형을 유지
-    return 10 * spread(avgS) * meanSize + 8 * (spread(c1) + spread(c5)) + 4 * (spread(c12) + spread(c45)) + 1 * spread(avgH);
-  }
-  function teamKey(teams) { return teams.map(function (t) { return t.slice().sort().join(','); }).sort().join('|'); }
-  /** refs 를 n 팀으로 고르게 나눈다. 무작위 시작 + 맞바꾸기 개선을 여러 번 돌려, 가장 좋은 것과 비슷하게 좋은 구성 중 하나를 고른다(seen 에 있는 것은 피함) */
-  function balanceTeams(refs, n, info, seen) {
-    var N = refs.length, sizes = [];
-    for (var i = 0; i < n; i++) sizes.push(Math.floor(N / n) + (i < N % n ? 1 : 0));
-    var results = [];
-    for (var run = 0; run < 40; run++) {
-      var order = refs.slice();
-      for (var k = order.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)); var tmp = order[k]; order[k] = order[j]; order[j] = tmp; }
-      var teams = [], at = 0;
-      sizes.forEach(function (sz) { teams.push(order.slice(at, at + sz)); at += sz; });
-      var cost = teamCost(teams, info), improved = true, guard = 0;
-      while (improved && guard++ < 200) {
-        improved = false;
-        for (var a = 0; a < n && !improved; a++) for (var b = a + 1; b < n && !improved; b++)
-          for (var x = 0; x < teams[a].length && !improved; x++) for (var y = 0; y < teams[b].length && !improved; y++) {
-            var t1 = teams[a][x]; teams[a][x] = teams[b][y]; teams[b][y] = t1;
-            var c = teamCost(teams, info);
-            if (c < cost - 1e-9) { cost = c; improved = true; }
-            else { teams[b][y] = teams[a][x]; teams[a][x] = t1; }
-          }
-      }
-      results.push({ cost: cost, teams: teams, key: teamKey(teams) });
-    }
-    results.sort(function (p, q) { return p.cost - q.cost; });
-    var best = results[0].cost;
-    // 가장 좋은 것과 비슷하게 좋은 구성 중 아직 안 보여 준 것. 인원이 적어 대안이 없으면 허용 폭을 조금씩 넓힌다
-    var pool = null;
-    [4, 8, 12].forEach(function (tol) {
-      if (pool) return;
-      var fresh = results.filter(function (r) { return r.cost <= best + tol && !seen[r.key]; });
-      if (fresh.length) pool = fresh;
-    });
-    if (!pool) {                                       // 계산이 모두 같은 구성으로 모이면, 가장 좋은 구성에서 두 사람만 맞바꾼 것 중 가장 균형이 좋은 것을 낸다
-      var base = results[0].teams, cands = [];
-      for (var v = 0; v < 60; v++) {
-        var ta = Math.floor(Math.random() * n), tb = Math.floor(Math.random() * n);
-        if (ta === tb || !base[ta].length || !base[tb].length) continue;
-        var ia = Math.floor(Math.random() * base[ta].length), ib = Math.floor(Math.random() * base[tb].length);
-        var alt = base.map(function (t) { return t.slice(); });
-        var sw = alt[ta][ia]; alt[ta][ia] = alt[tb][ib]; alt[tb][ib] = sw;
-        var key = teamKey(alt);
-        if (!seen[key] && !cands.some(function (c) { return c.key === key; })) cands.push({ cost: teamCost(alt, info), teams: alt, key: key });
-      }
-      cands.sort(function (p, q) { return p.cost - q.cost; });
-      pool = cands.length ? cands.slice(0, 3) : results.slice(0, 1);
-    }
-    return pool[Math.floor(Math.random() * pool.length)];
+    return svg;
   }
   /** 팀 안 표시 순서(운영진 편집 화면): 포지션 5→1, 같은 포지션은 실력 높은 순, 정보 없는 사람·직접 적은 이름은 뒤. 저장할 때 서버도 같은 순서로 맞춘다 */
   function teamOrder(list, info) {
@@ -1885,7 +1857,7 @@
   }
   function teamStateFrom(r) {
     var baseCount = r.players.filter(function (p) { return p.base; }).length;
-    var t = { r: r, mode: r.saved ? r.saved.mode : (baseCount >= 15 ? 3 : 2), teams: { '검정': [], '흰색': [], '주황': [] }, active: '검정', editing: !r.saved, sel: {} };   // 처음 열 때: 팀 나눌 사람이 15명 이상이면 3파전, 아니면 2파전
+    var t = { r: r, mode: r.saved ? r.saved.mode : (baseCount >= 15 ? 3 : 2), teams: { '검정': [], '흰색': [], '주황': [] }, active: '검정', editing: !r.saved && r.canEdit !== false, sel: {} };   // 처음 열 때: 팀 나눌 사람이 15명 이상이면 3파전, 아니면 2파전
     if (r.saved) TEAM_COLORS.forEach(function (c) { t.teams[c] = (r.saved.teams[c] || []).map(function (x) { return { ref: x.ref || '', name: x.name }; }); });
     r.players.forEach(function (p) { t.sel[p.ref] = !!p.base; });                     // 기본: 연습·노쇼 빼고, 대기는 나왔다고 표시된 사람만
     TEAM_COLORS.forEach(function (c) { t.teams[c].forEach(function (x) { if (x.ref) t.sel[x.ref] = true; } ); });   // 저장된 팀에 있는 사람은 포함
@@ -1906,16 +1878,36 @@
     var assigned = {};
     colors.forEach(function (c) { T.teams[c].forEach(function (x) { if (x.ref) assigned[x.ref] = c; }); });
 
+    if (!T.editing && !r.saved) {                        // 저장된 구성이 없고 고칠 수도 없는 경우(끝난 모임)
+      panel.appendChild(h('p', { text: '저장된 팀 구성이 없어요.' }));
+      mount(root); return;
+    }
     if (!T.editing) {                                    // 저장된 구성 보기
-      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: r.saved.by + ' 님이 ' + r.saved.at.slice(5, 16) + '에 저장' }));
+      var done = r.saved.done;
+      panel.appendChild(h('div', { class: 'teams-state' + (done ? ' teams-state--done' : '') },
+        h('b', { text: done ? '✓ 확정된 팀 구성' : '저장된 팀 구성 (아직 확정 전)' }),
+        h('span', { text: done ? r.saved.doneBy + ' 님이 ' + r.saved.doneAt.slice(5, 16) + '에 확정 · ' + r.saved.by + ' 님이 저장' : r.saved.by + ' 님이 ' + r.saved.at.slice(5, 16) + '에 저장' })));
       panel.appendChild(h('div', { class: 'teams' + (T.mode === 2 ? ' teams--2' : '') }, colors.map(function (c) {
         return h('div', { class: 'team' }, h('p', { class: 'team__name' }, dot(c), c + ' ' + T.teams[c].length + '명'),
           h('ol', null, T.teams[c].map(function (x) { return h('li', { text: x.name }); })));
       })));
       var left = r.players.filter(function (p) { return p.base && !assigned[p.ref]; });
       if (left.length) panel.appendChild(h('p', { class: 'fine', text: '팀에 안 들어간 참석자: ' + left.map(function (p) { return p.name; }).join(', ') }));
+      var confirmCall = function (on) {
+        if (document.body.classList.contains('is-busy')) return;
+        setBusy(true);
+        call('teamsConfirm', { eventId: r.eventId, on: on, base: r.saved.ver }).then(function (x) { setBusy(false); S.team = teamStateFrom(x); render(); toast(on ? '팀 구성을 확정했어요' : '확정을 풀었어요'); },
+          function (err) { setBusy(false); if (handleAuth(err)) return; toast(err.message || '처리하지 못했어요.'); if (err.code === 'CONFLICT') openTeams({ id: r.eventId, title: r.title }); });
+      };
       panel.appendChild(h('div', { class: 'act', style: 'margin-top:12px' },
-        h('button', { class: 'btn', type: 'button', text: '수정하기', onclick: function () { T.editing = true; render(); } }),
+        r.canConfirm ? h('button', { class: 'btn', type: 'button', text: '이 구성으로 확정', onclick: function () {
+          ask({ title: '이 팀 구성으로 확정할까요?', text: '확정하면 지난 일정에서도 이 구성이 그대로 보여요. 고치려면 확정한 사람이나 운영진이 확정을 풀어야 해요.', ok: '확정' })
+            .then(function (yes) { if (yes) confirmCall(true); });
+        } }) : null,
+        r.canUnconfirm ? h('button', { class: 'btn btn--ghost', type: 'button', text: '확정 풀기', onclick: function () {
+          ask({ title: '확정을 풀까요?', text: '풀면 다시 고치거나 지울 수 있어요.', ok: '확정 풀기' }).then(function (yes) { if (yes) confirmCall(false); });
+        } }) : null,
+        r.canEdit ? h('button', { class: 'btn' + (r.canConfirm ? ' btn--ghost' : ''), type: 'button', text: '수정하기', onclick: function () { T.editing = true; render(); } }) : null,
         r.canDelete ? h('button', { class: 'btn btn--ghost', type: 'button', text: '팀 구성 지우기', onclick: function () {
           ask({ title: '저장된 팀 구성을 지울까요?', ok: '지우기', danger: true }).then(function (yes) {
             if (!yes) return;
@@ -1955,35 +1947,37 @@
         if (p.late) tags.push('급참');
         return h('label', { class: 'pick' }, cb, h('span', null, p.name, tags.length ? h('span', { class: 'tag', text: ' · ' + tags.join(' · ') }) : null, p.noshow ? h('span', { class: 'tag tag--warn', text: ' · 노쇼' }) : null));
       })));
-    if (r.staff) {                                       // 운영진: 실력·포지션·키로 자동 배정
+    {                                                    // 자동 구성(누구나): 실력·포지션·키로 서버가 나눠 명단만 돌려준다
       var info = r.profiles || {};
-      colors.forEach(function (c) { T.teams[c] = teamOrder(T.teams[c], info); });   // 포지션 5→1, 실력순으로 보여 준다
+      if (r.staff) colors.forEach(function (c) { T.teams[c] = teamOrder(T.teams[c], info); });   // 운영진은 포지션 5→1, 실력순으로 바로 정렬(회원은 서버가 정렬해 준 순서)
       var autoRun = function () {
         var refs = r.players.filter(function (p) { return p.ref && T.sel[p.ref]; }).map(function (p) { return p.ref; });
         if (refs.length < 2) { toast('나눌 참석자가 2명 이상 있어야 해요.'); return; }
+        if (document.body.classList.contains('is-busy')) return;
         T.hist = T.hist || []; T.seen = T.seen || {};
-        var res = balanceTeams(refs, T.mode, info, T.seen);
-        T.seen[res.key] = true;
-        if (T.histIdx != null && T.histIdx < T.hist.length - 1) T.hist = T.hist.slice(0, T.histIdx + 1);
-        T.hist.push(res.teams); T.histIdx = T.hist.length - 1;
-        applyAuto(res.teams);
+        setBusy(true);
+        call('teamsAuto', { eventId: r.eventId, mode: T.mode, refs: refs, avoid: Object.keys(T.seen) }).then(function (res) {
+          setBusy(false);
+          T.seen[res.key] = true; T.noInfo = res.noInfo;
+          if (T.histIdx != null && T.histIdx < T.hist.length - 1) T.hist = T.hist.slice(0, T.histIdx + 1);
+          T.hist.push(res.teams); T.histIdx = T.hist.length - 1;
+          applyAuto(res.teams);
+        }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '나누지 못했어요.'); });
       };
       var applyAuto = function (teams) {
-        var byRef = {};
-        r.players.forEach(function (p) { byRef[p.ref] = p; });
         colors.forEach(function (c, i) {
           var typed = T.teams[c].filter(function (x) { return !x.ref; });               // 직접 적은 이름은 그 자리에 둔다
-          T.teams[c] = (teams[i] || []).map(function (ref) { return { ref: ref, name: byRef[ref] ? byRef[ref].name : ref }; }).concat(typed);
+          T.teams[c] = (teams[i] || []).map(function (x) { return { ref: x.ref, name: x.name }; }).concat(typed);
         });
         render();
       };
       var nav = h('div', { class: 'pair', style: 'margin:0 0 8px' },
-        h('button', { class: 'btn btn--ghost', type: 'button', text: T.hist && T.hist.length ? '다시 섞기' : '자동 배정', onclick: autoRun }),
+        h('button', { class: 'btn btn--ghost', type: 'button', text: T.hist && T.hist.length ? '다시 섞기' : '자동 구성', onclick: autoRun }),
         h('button', { class: 'btn btn--ghost', type: 'button', text: '이전 구성', disabled: !(T.hist && T.histIdx > 0), onclick: function () { T.histIdx--; applyAuto(T.hist[T.histIdx]); } }),
         h('button', { class: 'btn btn--ghost', type: 'button', text: '다음 구성', disabled: !(T.hist && T.histIdx < T.hist.length - 1), onclick: function () { T.histIdx++; applyAuto(T.hist[T.histIdx]); } }));
       panel.appendChild(nav);
-      var noInfo = r.players.filter(function (p) { return p.ref && T.sel[p.ref] && !info[p.ref]; }).length;
-      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 8px', text: '팀 평균 실력과 포지션이 고르게, 그다음 평균 키가 비슷하게 나눠요. 마음에 드는 구성이 나오면 [저장].' + (noInfo ? ' 선수 정보가 없는 ' + noInfo + '명(게스트 등)은 평균으로 보고 계산해요.' : '') + (T.hist && T.hist.length ? ' (' + (T.histIdx + 1) + '/' + T.hist.length + ')' : '') }));
+      var noInfo = r.staff ? r.players.filter(function (p) { return p.ref && T.sel[p.ref] && !info[p.ref]; }).length : (T.noInfo || 0);
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 8px', text: '[자동 구성]은 팀 평균 실력과 포지션이 고르게, 그다음 평균 키가 비슷하게 나눠요. [다시 섞기]로 다른 구성, 이전·다음으로 골라서 [저장].' + (noInfo ? ' 선수 정보가 없는 ' + noInfo + '명(게스트 등)은 평균으로 보고 계산해요.' : '') + (T.hist && T.hist.length ? ' (' + (T.histIdx + 1) + '/' + T.hist.length + ')' : '') }));
     }
     panel.appendChild(h('div', { class: 'teams' + (T.mode === 2 ? ' teams--2' : '') }, colors.map(function (c) {
       return h('div', { class: 'team' + (T.active === c ? ' team--active' : ''), role: 'button', tabindex: '0', 'aria-label': c + ' 팀 고르기', 'aria-pressed': T.active === c ? 'true' : 'false',

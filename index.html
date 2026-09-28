@@ -992,12 +992,16 @@
       var done = byDate[date].every(function (e) { return e.ended; });
       var next = !done && !anchored; if (next) anchored = true;          // 아직 끝나지 않은 첫 모임 = 페이지를 열면 여기부터 보인다
       var cls = 'leaf' + (p.dow === 0 ? ' leaf--sun' : p.dow === 6 ? ' leaf--sat' : '') + (isToday && !done ? ' leaf--stamped' : '');
-      var celebrants = [];
-      byDate[date].forEach(function (e) { (e.birthdays || []).forEach(function (n) { if (celebrants.indexOf(n) < 0) celebrants.push(n); }); });
+      var celebrants = [], byears = {};
+      byDate[date].forEach(function (e) {
+        (e.birthdays || []).forEach(function (n) { if (celebrants.indexOf(n) < 0) celebrants.push(n); });
+        Object.keys(e.birthdayYears || {}).forEach(function (n) { byears[n] = e.birthdayYears[n]; });
+      });
+      var withYear = function (n) { return byears[n] ? n + '(' + byears[n] + ')' : n; };      // 생축 문구: 이름(년생)
       var mine = celebrants.indexOf(d.me.nickname) >= 0;
       var bdayNote = celebrants.length ? h('p', { class: 'bday-note', role: 'note' }, '🎂 ',
-        mine ? [h('b', { text: d.me.nickname }), ' 님, 생일 축하드려요!' + (celebrants.length > 1 ? ' (' + celebrants.filter(function (n) { return n !== d.me.nickname; }).join(', ') + ' 님도 생일)' : '')]
-             : [(isToday ? '오늘은 ' : ''), h('b', { text: celebrants.join(', ') }), ' 님 생일이에요. 축하해 주세요!']) : null;
+        mine ? [h('b', { text: withYear(d.me.nickname) }), ' 님, 생일 축하드려요!' + (celebrants.length > 1 ? ' (' + celebrants.filter(function (n) { return n !== d.me.nickname; }).map(withYear).join(', ') + ' 님도 생일)' : '')]
+             : [(isToday ? '오늘은 ' : ''), h('b', { text: celebrants.map(withYear).join(', ') }), ' 님 생일이에요. 축하해 주세요!']) : null;
       out.push(h('section', { class: 'day' + (done ? ' day--past' : '') + (next ? ' day--next' : '') },
         h('h2', { class: 'vh', text: dayLabel(date) + (rel ? ', ' + rel : '') }),
         h('div', { class: cls },

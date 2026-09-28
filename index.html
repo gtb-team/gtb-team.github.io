@@ -172,6 +172,11 @@
   .addname { display: flex; gap: 6px; margin-top: 10px; }
   .addname input { flex: 1; min-width: 0; min-height: 42px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; font-family: inherit; background: var(--paper); color: var(--ink); }
   .pool .ns { color: var(--sun); font-size: 12px; margin-left: 3px; }
+  .pool__item { display: flex; align-items: stretch; }
+  .pool__item > button:first-child { border-radius: 16px 0 0 16px; }
+  .pool .pool__x { border-radius: 0 16px 16px 0; border-left: 0; padding: 6px 9px; color: var(--ink-2); border-color: var(--ink); }
+  .pool--out li > button { border-style: dashed; border-color: var(--line); color: var(--ink-2); }
+  .team li .ns { color: var(--sun); font-size: 12px; }
   .prof { display: grid; grid-template-columns: 1fr 64px 56px 64px; gap: 6px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
   .prof__name { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .prof input { width: 100%; min-height: 40px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font: 700 15px/1 var(--num); text-align: center; }
@@ -404,7 +409,8 @@
   function keepRange(data) {
     var prev = S.range;
     S.data = data;
-    S.fetchedDay = kstToday();                                 // 이 화면을 받은 날(한국 시각). 자정을 넘기면 옛 화면이다
+    S.fetchedDay = kstToday();                                 // 이 화면을 받은 날(한국 시각). 자정이나 마감 시각을 넘기면 옛 화면이다
+    S.fetchedHM = kstHM();
     if (data && data.ver && data.ver > (S.maxVer || 0)) S.maxVer = data.ver;
     if (data && data.stage === 'ready') {
       var wide = !!(prev && prev.widened && prev.from === data.from && prev.to === data.to);   // 위·아래로 넓힌 목록은 기억해 두지 않는다
@@ -552,12 +558,32 @@
       return p.year + '-' + p.month + '-' + p.day;
     } catch (e) { return new Date(t.getTime() + 9 * 3600000).toISOString().slice(0, 10); }
   }
-  /** 화면을 받은 뒤 날짜가 바뀌었는지(자정을 넘겨 급참·취소 가능 여부가 달라졌을 수 있음) */
-  function dayChanged() { return !!(S.fetchedDay && S.fetchedDay !== kstToday()); }
-  /** 날짜가 바뀌었으면 새로 불러온 뒤 fn(새 화면 기준)을 부른다 */
+  function kstHM() {                                        // 지금 한국 시각 HH:MM
+    var t = new Date(Date.now() + (window.__clockSkew || 0));
+    try {
+      var p = {};
+      new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(t).forEach(function (x) { p[x.type] = x.value; });
+      return p.hour + ':' + p.minute;
+    } catch (e) { return new Date(t.getTime() + 9 * 3600000).toISOString().slice(11, 16); }
+  }
+  /** 신청·취소 마감 시각을 말로: '22:00' → '밤 10시', '24:00' → '밤 12시', '21:30' → '밤 9시 30분' */
+  function closeWords() {
+    var c = (S.data && S.data.applyClose) || '24:00', hh = Number(c.slice(0, 2)), mm = Number(c.slice(3, 5));
+    var ap = hh >= 18 || hh === 24 ? '밤 ' : hh >= 12 ? '오후 ' : '오전 ';
+    var h12 = hh === 24 || hh === 12 ? 12 : hh % 12;
+    return ap + h12 + '시' + (mm ? ' ' + mm + '분' : '');
+  }
+  /** 화면을 받은 뒤 날짜가 바뀌었거나 신청·취소 마감 시각(전날 22:00)을 넘겼는지(급참·취소 가능 여부가 달라졌을 수 있음) */
+  function dayChanged() {
+    if (!S.fetchedDay) return false;
+    if (S.fetchedDay !== kstToday()) return true;
+    var c = S.data && S.data.applyClose;
+    return !!(c && c !== '24:00' && S.fetchedHM && S.fetchedHM < c && kstHM() >= c);
+  }
+  /** 날짜가 바뀌었거나 마감 시각을 넘겼으면 새로 불러온 뒤 fn(새 화면 기준)을 부른다 */
   function freshThen(fn) {
     if (!dayChanged()) { fn(false); return; }
-    toast('날짜가 바뀌어서 새로 불러왔어요');
+    toast(S.fetchedDay !== kstToday() ? '날짜가 바뀌어서 새로 불러왔어요' : '신청·취소 마감 시각이 지나서 새로 불러왔어요');
     load(true).then(function () { fn(true); });
   }
 
@@ -667,8 +693,8 @@
     return function (d) {
       var e = evIn(d, evId);
       if (!e || e.my) return null;
-      var me = { name: d.me.nickname, kind: kind, me: true, pending: true, late: !!e.isToday };
-      var today = !!e.isToday;
+      var me = { name: d.me.nickname, kind: kind, me: true, pending: true, late: !!e.afterClose };
+      var today = !!e.afterClose;
       if (kind === '연습') {
         (e.practice = e.practice || []).push(me);
         e.my = { kind: '연습', waiting: false, no: e.practice.length, canCancel: !today, late: today };
@@ -991,7 +1017,8 @@
       var p = ymd(date), isToday = date === d.today, rel = isToday ? '오늘' : date === d.tomorrow ? '내일' : '';
       var done = byDate[date].every(function (e) { return e.ended; });
       var next = !done && !anchored; if (next) anchored = true;          // 아직 끝나지 않은 첫 모임 = 페이지를 열면 여기부터 보인다
-      var cls = 'leaf' + (p.dow === 0 ? ' leaf--sun' : p.dow === 6 ? ' leaf--sat' : '') + (isToday && !done ? ' leaf--stamped' : '');
+      var stamped = (isToday || byDate[date].some(function (e) { return e.afterClose; })) && !done;   // 취소 마감 도장: 전날 마감 시각부터
+      var cls = 'leaf' + (p.dow === 0 ? ' leaf--sun' : p.dow === 6 ? ' leaf--sat' : '') + (stamped ? ' leaf--stamped' : '');
       var celebrants = [], byears = {};
       byDate[date].forEach(function (e) {
         (e.birthdays || []).forEach(function (n) { if (celebrants.indexOf(n) < 0) celebrants.push(n); });
@@ -1011,7 +1038,7 @@
             h('div', { class: 'leaf__num', text: String(p.d) }),
             h('div', { class: 'leaf__dow', text: DOW[p.dow] + '요일' }),
             rel ? h('div', { class: 'leaf__rel', text: rel }) : null,
-            isToday && !done ? h('div', { class: 'stamp' }, d.sameDayApply ? '취소' : '신청', h('br'), '마감') : null),
+            stamped ? h('div', { class: 'stamp' }, d.sameDayApply ? '취소' : '신청', h('br'), '마감') : null),
           byDate[date].filter(function (e) { return e.draft; }).map(function (e) {            // 팀장전: 정원이 차면 가능, 시작되면 진행 중, 끝나면 팀 구성
             var label = e.draft === '완료' ? '팀장전 결과' : e.draft === '진행' ? '팀장전 진행 중' : '팀장전 가능';
             return h('button', { class: 'leaf__draft' + (e.draft === '진행' ? ' leaf__draft--live' : e.draft === '완료' ? ' leaf__draft--done' : ''), type: 'button', text: label,
@@ -1037,7 +1064,7 @@
       : h('p', { class: 'edge', id: 'moreFuture', text: '마지막 일정이에요' }));
     out.push(h('footer', { class: 'foot' },
       h('p', { text: '신청한 순서대로 정원까지 참석 확정, 그 뒤는 대기예요.' + (d.guestCutoff ? ' 모임 전날 ' + d.guestCutoff + ' 전에는 회원이 게스트보다 앞 순번입니다.' : '') }),
-      h('p', { text: '취소는 모임 전날 밤 12시까지. 당일 0시부터는 취소할 수 없고(대기는 언제든 가능), 당일 신청은 급참으로 기록돼요.' }),
+      h('p', { text: '취소는 모임 전날 ' + closeWords() + '까지. 그 뒤로는 취소할 수 없고(대기는 언제든 가능, 안 나오면 노쇼), 그 뒤 신청은 급참으로 기록돼요.' }),
       h('button', { class: 'linkbtn', type: 'button', text: '로그아웃', onclick: function () { store.clear(); S.token = ''; S.data = null; S.contacts = {}; renderLogin('', true); } })));
     return out;
   }
@@ -1196,7 +1223,7 @@
     else if (ev.started) status = h('span', { class: 'status', text: '노쇼 체크 중' });
     else if (ev.isPast) status = h('span', { class: 'status', text: '지난 모임' });
     else if (!ev.open) status = h('span', { class: 'status', text: '신청 마감' });
-    else if (ev.isToday) status = h('span', { class: 'status', text: '급참 접수 중' });
+    else if (ev.afterClose) status = h('span', { class: 'status', text: '급참 접수 중' });
     else if (ev.full) status = h('span', { class: 'status', text: '대기 접수' });
 
     var el = h('article', { class: 'ev' },
@@ -1218,15 +1245,15 @@
       var practice = ev.my.kind === '연습';
       if (ev.my.waiting) box.appendChild(h('p', { class: 'hint', style: 'margin:0 0 8px', text: '앞에서 취소가 나오면 순서대로 확정돼요' }));
       if (ev.my.canCancel) {
-        // 제약은 버튼 안에: 전날이면 "오늘 밤 12시까지"
-        var cancelLabel = (practice ? '연습 취소' : '신청 취소') + (ev.date === d.tomorrow && !ev.my.waiting ? ' · 오늘 밤 12시까지' : '');
+        // 제약은 버튼 안에: 전날이면 "오늘 밤 10시까지"
+        var cancelLabel = (practice ? '연습 취소' : '신청 취소') + (ev.date === d.tomorrow && !ev.my.waiting ? ' · 오늘 ' + closeWords() + '까지' : '');
         box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', text: cancelLabel, onclick: function () { cancel(ev); } }));
       }
       // 당일이라 취소할 수 없을 때는 버튼도 문구도 없다(날짜 칸의 "취소 마감" 도장이 알려 준다)
     } else if (ev.open) {
-      var applyLabel = ev.full ? '대기 ' + (ev.waitCount + 1) + '번으로 신청' : ev.isToday ? '급참 신청 · +' + won(d.lateFee) : '신청하기';
+      var applyLabel = ev.full ? '대기 ' + (ev.waitCount + 1) + '번으로 신청' : ev.afterClose ? '급참 신청 · +' + won(d.lateFee) : '신청하기';
       box.appendChild(h('button', { class: 'btn', type: 'button', text: applyLabel, onclick: function () { apply(ev, '참석'); } }));
-      if (ev.isToday) box.appendChild(h('p', { class: 'hint', text: '급참은 취소할 수 없어요' }));
+      if (ev.afterClose) box.appendChild(h('p', { class: 'hint', text: '급참은 취소할 수 없어요' }));
     }
     // 마감 뒤에는 버튼이 없다(인원 줄의 "신청 마감"이 알려 준다)
 
@@ -1261,8 +1288,9 @@
       return;
     }
     var practice = kind === '연습';
-    var go = ev.isToday && !(ev.full && !practice)
-      ? ask({ title: practice ? '오늘 모임에 연습으로 급참할까요?' : '오늘 모임에 급참할까요?', text: '급참비 ' + won(S.data.lateFee) + '이 추가되고, 신청하면 취소할 수 없어요.', ok: practice ? '연습 급참' : '급참 신청' })
+    var when = ev.isToday ? '오늘' : '내일';
+    var go = ev.afterClose && !(ev.full && !practice)
+      ? ask({ title: practice ? when + ' 모임에 연습으로 급참할까요?' : when + ' 모임에 급참할까요?', text: '신청·취소 마감(전날 ' + closeWords() + ')이 지나서 급참이에요. 급참비 ' + won(S.data.lateFee) + '이 추가되고, 신청하면 취소할 수 없어요.', ok: practice ? '연습 급참' : '급참 신청' })
       : Promise.resolve(true);
     go.then(function (yes) {
       if (!yes) return;
@@ -1281,7 +1309,7 @@
       freshThen(function () {
         var e2 = findEvent(S.data, ev.id);
         if (e2 && e2.my && e2.my.canCancel) cancel(e2);
-        else if (e2 && e2.my) toast('모임 당일이라 취소할 수 없어요. 사정이 생기면 운영진에게 알려 주세요.');
+        else if (e2 && e2.my) toast('신청·취소 마감(전날 ' + closeWords() + ')이 지나서 취소할 수 없어요. 사정이 생기면 운영진에게 알려 주세요.');
       });
       return;
     }
@@ -1296,7 +1324,7 @@
     var text = '명단에 "게스트 이름 (게스트, ' + d.me.nickname + ' 등록)"으로 표시되고 정원에 포함돼요.'
       + (ev.full ? '\n지금은 정원이 차서 대기로 들어가요.' : '')
       + (ev.guestPending ? '\n모임 전날 ' + d.guestCutoff + ' 전까지는 회원이 먼저라, 게스트는 그 시각에 남은 자리가 있으면 확정돼요.' : '')
-      + (ev.isToday && !ev.full ? '\n오늘 신청은 급참이라 급참비 ' + won(d.lateFee) + '이 추가되고 취소할 수 없어요.' : '');
+      + (ev.afterClose && !ev.full ? '\n마감(전날 ' + closeWords() + ') 뒤 신청은 급참이라 급참비 ' + won(d.lateFee) + '이 추가되고 취소할 수 없어요.' : '');
     ask({ title: '게스트 신청', text: text, body: h('label', { class: 'field' }, h('span', { text: '게스트 이름' }), input), ok: '게스트 신청',
       check: function () { if (input.value.trim()) return true; toast('게스트 이름을 입력해 주세요.'); input.focus(); return false; } })
       .then(function (yes) {
@@ -1386,7 +1414,7 @@
       body.appendChild(h('p', { class: 'fine', style: 'margin:10px 0 0' }, h('button', { class: 'linkbtn', type: 'button', text: '신청 취소 처리 (운영진 권한)', onclick: function () {
         var open = body.closest('.veil'); if (open) open.remove();          // 이 창을 닫고 확인 창을 연다
         ask({ title: a.name + ' 님의 신청을 취소 처리할까요?', ok: '취소 처리', danger: true,
-          text: '운영진 권한으로 처리하며, 마감(당일 0시) 뒤에도 할 수 있어요. 누가 처리했는지 기록에 남습니다. 확정 자리가 비면 대기 1번이 자동으로 올라와요.' })
+          text: '운영진 권한으로 처리하며, 마감(전날 ' + closeWords() + ') 뒤에도 할 수 있어요. 누가 처리했는지 기록에 남습니다. 확정 자리가 비면 대기 1번이 자동으로 올라와요.' })
           .then(function (yes) { if (yes) staffCall('staffRemove', keyOf(ev, a), '운영진 권한으로 취소 처리했어요'); });
       } })));
     }
@@ -1443,13 +1471,13 @@
     if (!rest.length) { toast('모든 회원이 이미 명단에 있어요.'); return; }
     var who = h('select', { 'aria-label': '회원' }, rest.map(function (m) { return h('option', { value: m.id, text: m.nickname }); }));
     var kind = h('select', { 'aria-label': '구분' }, h('option', { value: '참석', text: '참석' }), h('option', { value: '연습', text: '연습' }));
-    var sameDayOrPast = ev.date <= S.data.today;
+    var sameDayOrPast = !!(ev.afterClose || ev.isPast);                  // 마감(전날 22:00) 뒤·지난 모임이면 급참비 선택
     var late = h('input', { type: 'checkbox', checked: sameDayOrPast });
     ask({ title: '운영진 권한으로 추가 등록', ok: '추가 등록',
       text: dayLabel(ev.date) + '  ' + ev.title + '\n마감 뒤에도 등록할 수 있어요. 명단에 "운영진 등록"으로 표시되고 기록에 남습니다.'
         + (ev.started ? '\n이미 시작된 모임이라 실제로 나온 것으로 기록돼요.' : ''),
       body: h('div', null, h('label', { class: 'field' }, h('span', { text: '회원' }), who), h('label', { class: 'field' }, h('span', { text: '구분' }), kind),
-        sameDayOrPast ? h('label', { class: 'check' }, late, '급참비 부과 (당일 신청인 경우)') : null) })
+        sameDayOrPast ? h('label', { class: 'check' }, late, '급참비 부과 (마감 뒤 신청인 경우)') : null) })
       .then(function (yes) { if (yes) staffCall('staffAdd', { eventId: ev.id, memberId: who.value, kind: kind.value, late: sameDayOrPast && late.checked }, '운영진 권한으로 등록했어요'); });
   }
 
@@ -1864,8 +1892,19 @@
     var t = { r: r, mode: r.saved ? r.saved.mode : (baseCount >= 15 ? 3 : 2), teams: { '검정': [], '흰색': [], '주황': [] }, active: '검정', editing: !r.saved && r.canEdit !== false, sel: {} };   // 처음 열 때: 팀 나눌 사람이 15명 이상이면 3파전, 아니면 2파전
     if (r.saved) TEAM_COLORS.forEach(function (c) { t.teams[c] = (r.saved.teams[c] || []).map(function (x) { return { ref: x.ref || '', name: x.name }; }); });
     r.players.forEach(function (p) { t.sel[p.ref] = !!p.base; });                     // 기본: 연습·노쇼 빼고, 대기는 나왔다고 표시된 사람만
-    TEAM_COLORS.forEach(function (c) { t.teams[c].forEach(function (x) { if (x.ref) t.sel[x.ref] = true; } ); });   // 저장된 팀에 있는 사람은 포함
+    var noshow = {};
+    r.players.forEach(function (p) { if (p.noshow) noshow[p.ref] = true; });
+    TEAM_COLORS.forEach(function (c) { t.teams[c].forEach(function (x) { if (x.ref && !noshow[x.ref]) t.sel[x.ref] = true; } ); });   // 저장된 팀에 있는 사람은 포함(노쇼는 제외)
+    t.noshowRefs = noshow;
     return t;
+  }
+  /** 편집을 시작할 때: 노쇼로 표시된 사람은 팀에서 뺀다(저장된 구성을 고칠 때도) */
+  function dropNoshow(T) {
+    var gone = [];
+    TEAM_COLORS.forEach(function (c) {
+      T.teams[c] = T.teams[c].filter(function (x) { if (x.ref && T.noshowRefs && T.noshowRefs[x.ref]) { gone.push(x.name); return false; } return true; });
+    });
+    if (gone.length) toast('노쇼로 표시된 ' + gone.join(', ') + ' 님은 팀에서 뺐어요');
   }
   function closeTeams() { S.view = 'main'; S.team = null; S.scroll = { mode: 'anchor' }; load(); }
   function teamsLink(date) { return (REMOTE ? selfUrl : (BOOT.appUrl || '')) + '?teams=' + date; }
@@ -1893,7 +1932,7 @@
         h('span', { text: done ? r.saved.doneBy + ' 님이 ' + r.saved.doneAt.slice(5, 16) + '에 확정 · ' + r.saved.by + ' 님이 저장' : r.saved.by + ' 님이 ' + r.saved.at.slice(5, 16) + '에 저장' })));
       panel.appendChild(h('div', { class: 'teams' + (T.mode === 2 ? ' teams--2' : '') }, colors.map(function (c) {
         return h('div', { class: 'team' }, h('p', { class: 'team__name' }, dot(c), c + ' ' + T.teams[c].length + '명'),
-          h('ol', null, T.teams[c].map(function (x) { return h('li', { text: x.name }); })));
+          h('ol', null, T.teams[c].map(function (x) { return h('li', null, x.name, x.ref && T.noshowRefs && T.noshowRefs[x.ref] ? h('span', { class: 'ns', text: ' 노쇼' }) : null); })));
       })));
       var left = r.players.filter(function (p) { return p.base && !assigned[p.ref]; });
       if (left.length) panel.appendChild(h('p', { class: 'fine', text: '팀에 안 들어간 참석자: ' + left.map(function (p) { return p.name; }).join(', ') }));
@@ -1911,7 +1950,7 @@
         r.canUnconfirm ? h('button', { class: 'btn btn--ghost', type: 'button', text: '확정 풀기', onclick: function () {
           ask({ title: '확정을 풀까요?', text: '풀면 다시 고치거나 지울 수 있어요.', ok: '확정 풀기' }).then(function (yes) { if (yes) confirmCall(false); });
         } }) : null,
-        r.canEdit ? h('button', { class: 'btn' + (r.canConfirm ? ' btn--ghost' : ''), type: 'button', text: '수정하기', onclick: function () { T.editing = true; render(); } }) : null,
+        r.canEdit ? h('button', { class: 'btn' + (r.canConfirm ? ' btn--ghost' : ''), type: 'button', text: '수정하기', onclick: function () { T.editing = true; dropNoshow(T); render(); } }) : null,
         r.canDelete ? h('button', { class: 'btn btn--ghost', type: 'button', text: '팀 구성 지우기', onclick: function () {
           ask({ title: '저장된 팀 구성을 지울까요?', ok: '지우기', danger: true }).then(function (yes) {
             if (!yes) return;
@@ -1935,8 +1974,8 @@
     // 팀에 넣을 사람 고르기: 연습·노쇼는 기본으로 빠져 있고, 급참·확정은 들어 있다. 체크를 바꿔 조정
     var selCount = r.players.filter(function (p) { return T.sel[p.ref]; }).length;
     panel.appendChild(h('details', { class: 'adjust' },
-      h('summary', { text: '팀 나눌 사람 조정 (' + selCount + '/' + r.players.length + '명)' }),
-      h('p', { class: 'fine', style: 'margin:6px 0', text: '연습 신청과 노쇼는 기본으로 빠져 있고, 급참은 들어 있어요. 체크를 풀면 팀에서도 빠져요. 명단에 없는 사람은 아래 "명단에 없는 이름"으로 넣어요.' }),
+      h('summary', { text: '팀구성 대상 ' + selCount + '명 / 신청 ' + r.players.length + '명 (눌러서 조정)' }),
+      h('p', { class: 'fine', style: 'margin:6px 0', text: '연습 신청과 노쇼는 기본으로 빠져 있고, 급참은 들어 있어요. 체크를 풀면 팀구성에서 제외돼요(팀에 들어가 있었으면 거기서도 빠져요). 명단에 없는 사람은 아래 "명단에 없는 이름"으로 넣어요.' }),
       r.players.map(function (p) {
         var cb = h('input', { type: 'checkbox', checked: !!T.sel[p.ref], 'aria-label': p.name + ' 팀 나누기에 포함' });
         cb.addEventListener('change', function () {
@@ -1994,10 +2033,22 @@
     })));
     var free = r.players.filter(function (p) { return T.sel[p.ref] && !assigned[p.ref]; });
     panel.appendChild(h('h2', { text: '안 나눈 참석자 ' + free.length + '명' }));
+    if (free.length) panel.appendChild(h('p', { class: 'fine', style: 'margin:0', text: '이름을 누르면 ' + T.active + ' 팀에 들어가요. 오른쪽 ✕는 팀구성에서 제외.' }));
     panel.appendChild(h('ul', { class: 'pool' }, free.map(function (p) {
-      return h('li', null, h('button', { type: 'button', 'aria-label': p.name + '을(를) ' + T.active + ' 팀에', onclick: function () { T.teams[T.active].push({ ref: p.ref, name: p.name }); render(); } },
-        p.name + (p.guest ? ' (게스트)' : ''), p.noshow ? h('span', { class: 'ns', text: '노쇼' }) : null));
+      return h('li', { class: 'pool__item' },
+        h('button', { type: 'button', 'aria-label': p.name + '을(를) ' + T.active + ' 팀에', onclick: function () { T.teams[T.active].push({ ref: p.ref, name: p.name }); render(); } },
+          p.name + (p.guest ? ' (게스트)' : ''), p.noshow ? h('span', { class: 'ns', text: '노쇼' }) : null),
+        h('button', { class: 'pool__x', type: 'button', 'aria-label': p.name + ' 팀구성에서 제외', text: '✕', onclick: function () { T.sel[p.ref] = false; render(); } }));
     })));
+    var excluded = r.players.filter(function (p) { return !T.sel[p.ref]; });
+    if (excluded.length) {
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:10px 0 4px', text: '팀구성에서 제외 ' + excluded.length + '명 (누르면 다시 넣기)' }));
+      panel.appendChild(h('ul', { class: 'pool pool--out' }, excluded.map(function (p) {
+        var why = p.noshow ? '노쇼' : p.practice ? '연습' : p.waiting && !p.came ? '대기' : '';
+        return h('li', null, h('button', { type: 'button', 'aria-label': p.name + ' 다시 넣기', onclick: function () { T.sel[p.ref] = true; render(); } },
+          p.name + (p.guest ? ' (게스트)' : ''), why ? h('span', { class: 'ns', text: why }) : null));
+      })));
+    }
     var input = h('input', { type: 'text', maxlength: '20', placeholder: '명단에 없는 이름', 'aria-label': '직접 이름 넣기' });
     var addFree = function () {
       var v = input.value.trim();

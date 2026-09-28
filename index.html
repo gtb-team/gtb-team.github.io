@@ -1093,7 +1093,7 @@
     list.forEach(function (a, i) {
       var parts = [h('span', { class: 'no', text: String(i + 1) }), a.name + (a.me && a.kind !== '게스트' ? ' (나)' : '')];
       if (a.kind === '게스트') parts.push(h('span', { class: 'by', text: a.direct ? '게스트(게스트 방 신청·입금 완료)' : '게스트, ' + a.by + ' 등록' + (ev.guestPending && where === 'confirmed' ? ', 전날 ' + d.guestCutoff + '에 확정' : '') }));
-      if (a.late) parts.push(h('span', { class: 'tagx tagx--late', text: '급참' }));
+      if (a.late && a.kind !== '게스트') parts.push(h('span', { class: 'tagx tagx--late', text: '급참' }));   // 게스트는 급참 개념 없음
       if (a.staff) parts.push(h('span', { class: 'tagx tagx--staff', text: '운영진 등록' }));
       if (a.mark === '노쇼') parts.push(h('span', { class: 'tagx tagx--no', text: '노쇼' }));
       if (a.mark === '참석' && where === 'waiting') parts.push(h('span', { class: 'tagx tagx--came', text: '나옴' }));
@@ -1324,7 +1324,7 @@
     var text = '명단에 "게스트 이름 (게스트, ' + d.me.nickname + ' 등록)"으로 표시되고 정원에 포함돼요.'
       + (ev.full ? '\n지금은 정원이 차서 대기로 들어가요.' : '')
       + (ev.guestPending ? '\n모임 전날 ' + d.guestCutoff + ' 전까지는 회원이 먼저라, 게스트는 그 시각에 남은 자리가 있으면 확정돼요.' : '')
-      + (ev.afterClose && !ev.full ? '\n마감(전날 ' + closeWords() + ') 뒤 신청은 급참이라 급참비 ' + won(d.lateFee) + '이 추가되고 취소할 수 없어요.' : '');
+      + (ev.afterClose ? '\n마감(전날 ' + closeWords() + ')이 지나서 게스트 신청은 취소할 수 없어요.' : '');   // 게스트는 급참비 없음
     ask({ title: '게스트 신청', text: text, body: h('label', { class: 'field' }, h('span', { text: '게스트 이름' }), input), ok: '게스트 신청',
       check: function () { if (input.value.trim()) return true; toast('게스트 이름을 입력해 주세요.'); input.focus(); return false; } })
       .then(function (yes) {
@@ -1512,7 +1512,7 @@
         var box = h('input', { type: 'checkbox', checked: where === 'waiting' ? a.mark === '참석' : a.mark === '노쇼' });
         picks.push({ a: a, where: where, box: box });
         return h('label', { class: 'pick' }, box, h('span', null, (i + 1) + '. ' + a.name,
-          a.kind === '게스트' ? h('small', { text: a.direct || !a.by ? '  게스트(직접 신청)' : '  게스트, ' + a.by + ' 등록' }) : null, a.late ? h('small', { text: '  급참' }) : null));
+          a.kind === '게스트' ? h('small', { text: a.direct || !a.by ? '  게스트(직접 신청)' : '  게스트, ' + a.by + ' 등록' }) : null, a.late && a.kind !== '게스트' ? h('small', { text: '  급참' }) : null));
       });
     }
     // 자유투 꼴찌(음료수 당번): 회원 중 최대 3명
@@ -1987,7 +1987,7 @@
         if (p.guest) tags.push('게스트');
         if (p.practice) tags.push('연습');
         if (p.waiting) tags.push(p.came ? '대기(나옴)' : '대기');
-        if (p.late) tags.push('급참');
+        if (p.late && !p.guest) tags.push('급참');
         return h('label', { class: 'pick' }, cb, h('span', null, p.name, tags.length ? h('span', { class: 'tag', text: ' · ' + tags.join(' · ') }) : null, p.noshow ? h('span', { class: 'tag tag--warn', text: ' · 노쇼' }) : null));
       })));
     {                                                    // 자동 구성(누구나): 실력·포지션·키로 서버가 나눠 명단만 돌려준다

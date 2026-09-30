@@ -1404,7 +1404,7 @@
       });
     } else if (where !== 'waiting' || a.mark === '참석') {
       var mvWhy = !ev.started ? (ev.isPast ? '지난 모임이에요' : '모임 당일 ' + (d.noShowFrom || '05:30') + '부터 나온 사람끼리 투표해요')
-        : ev.locked ? '투표가 끝났어요' + (ev.mvp && ev.mvp.name ? ' (MVP: ' + ev.mvp.name + ')' : '')
+        : !ev.mvpOpen ? '투표가 끝났어요(당일 ' + (d.mvpClose || '09:00') + ' 마감)' + (ev.mvp && ev.mvp.name ? ' · MVP: ' + ev.mvp.name : '')
         : a.me ? '자기 자신에게는 투표할 수 없어요'
         : !ev.mvpVoter ? '그날 나온 회원만 투표할 수 있어요'
         : '나온 사람에게만 투표할 수 있어요';
@@ -1449,7 +1449,7 @@
       if (S.contacts[ckey]) show(S.contacts[ckey]); else fetchContact();
     }
     ask({ title: dayLabel(ev.date) + '  ' + ev.title, body: body, ok: boxes.length ? '저장' : false, cancel: boxes.length ? '취소' : '닫기',
-      text: boxes.length ? (ev.locked ? '출결이 확정된 모임이에요. 운영진 권한으로 고칩니다.' : '저장한 뒤에도 다시 열어 고칠 수 있어요.') : '' })
+      text: boxes.length ? (ev.locked && ev.canMark ? '출결이 확정된 모임이에요. 운영진 권한으로 고칩니다.' : '저장한 뒤에도 다시 열어 고칠 수 있어요.') : '' })
       .then(function (yes) {
         if (!yes || !boxes.length) return;
         var key = keyOf(ev, a), changed = false;
@@ -2094,10 +2094,10 @@
       ask({ title: '🏆 MVP', ok: false, cancel: '닫기', text: dayLabel(r.date) + '  ' + r.title + '\n' + (r.result ? r.result.name + ' 님 (' + r.result.votes + '표)' : '투표가 없어 MVP가 없어요.') });
       return;
     }
-    if (!r.canVote) { toast('이 모임에 나온 사람만 투표할 수 있어요.'); return; }
+    if (!r.canVote) { toast('이 모임에 나온 회원만 투표할 수 있어요(노쇼로 표시됐거나 대기였다면 운영진에게 알려 주세요).'); return; }
     var name = 'mvp-' + r.eventId, radios = [];
     var body = h('div', null,
-      h('p', { class: 'fine', style: 'margin:0 0 6px', text: '오늘 가장 잘한 한 명을 고르세요. 운영진이 출결을 확정할 때까지 바꿀 수 있어요.' }),
+      h('p', { class: 'fine', style: 'margin:0 0 6px', text: '오늘 가장 잘한 한 명을 고르세요. 당일 ' + (r.close || '09:00') + '까지 바꿀 수 있어요(출결 확정과 상관없이).' }),
       r.candidates.map(function (c) {
         var rb = h('input', { type: 'radio', name: name, checked: r.mine === c.ref });
         radios.push({ ref: c.ref, box: rb });

@@ -79,7 +79,10 @@
   .rank b { flex: 1; font-weight: 700; }
   .rank i { font: 700 18px/1 var(--num); font-style: normal; color: var(--sun); }
   .rank li.is-top b, .rank li.is-top i { color: var(--sun); }
-  .leaf--stamped { margin-bottom: 22px; }
+  .leaf__head { position: relative; }                                   /* 도장은 날짜 글씨 묶음 기준으로 붙는다 */
+  .leaf--stamped { margin-bottom: 4px; }
+  .leaf--stamped .leaf__head { margin-bottom: 28px; }                   /* 도장 자리: 아래 팀구성·팀장전·MVP 버튼과 겹치지 않게(기울인 도장 모서리까지) */
+  .leaf__head .stamp { bottom: -18px; }
   .leaf--stamped .leaf__rel { text-align: left; padding-left: 8px; }   /* 도장이 글자를 가리지 않게 */
   .stamp { position: absolute; right: -14px; bottom: -20px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--sun); box-shadow: inset 0 0 0 2px var(--paper), inset 0 0 0 3px var(--sun); background: var(--paper); color: var(--sun); font-size: 11px; font-weight: 800; line-height: 1.15; transform: rotate(-14deg); }
 
@@ -1033,7 +1036,7 @@
         h('h2', { class: 'vh', text: dayLabel(date) + (rel ? ', ' + rel : '') }),
         h('div', { class: cls },
           // 날짜 글씨는 위의 숨긴 제목이 읽어 주므로 보조기기에는 감춘다(아래의 팀장전·꼴찌 버튼은 읽혀야 하므로 감싸지 않는다)
-          h('div', { 'aria-hidden': 'true' },
+          h('div', { class: 'leaf__head', 'aria-hidden': 'true' },
             h('div', { class: 'leaf__month', text: p.m + '월' }),
             h('div', { class: 'leaf__num', text: String(p.d) }),
             h('div', { class: 'leaf__dow', text: DOW[p.dow] + '요일' }),

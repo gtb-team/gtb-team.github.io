@@ -135,6 +135,14 @@
   .who small { flex: none; color: var(--ink-2); }
   .leaf__mvp { display: block; width: 100%; padding: 4px 3px 5px; border: 0; border-top: 1px solid var(--line); background: none; font-family: inherit; font-size: 11px; line-height: 1.25; color: var(--ink-2); text-align: center; }
   .leaf__mvp b { display: block; font-size: 12px; color: var(--ink); word-break: keep-all; }
+  button.leaf__mvp { cursor: pointer; }
+  .modal .mvp-res__name { margin: 0; font-size: 24px; font-weight: 800; color: var(--ink); }
+  .modal .mvp-res__share { margin: 4px 0 8px; color: var(--ink-2); }
+  .mvp-res__share b { color: var(--sun); font-size: 18px; }
+  .mvp-res__bar { height: 8px; border-radius: 4px; background: var(--note-bg); overflow: hidden; }
+  .mvp-res__bar i { display: block; height: 100%; background: var(--sun); }
+  .mvp-res__voters { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+  .mvp-res__voters li { padding: 4px 10px; border: 1px solid var(--line); border-radius: 14px; font-size: 14px; }
   .leaf__mvp i { display: block; margin-top: 1px; font: 700 12px/1 var(--num); font-style: normal; color: var(--sun); }
   button.leaf__mvp { cursor: pointer; }
   button.leaf__mvp--todo b { color: var(--sat); }
@@ -1054,7 +1062,8 @@
               teamsIcon(), h('span', { class: 'leaf__teams-label' }, '팀구성', done ? ' ✓' : ''), h('span', { class: 'beta', text: 'beta' }));
           }),
           byDate[date].filter(function (e) { return e.mvp; }).map(function (e) {              // MVP: 확정 뒤엔 이름·표, 투표 중엔 투표 버튼
-            if (!e.mvp.open) return h('div', { class: 'leaf__mvp', title: 'MVP' }, '🏆 MVP', h('b', { text: e.mvp.name }), h('i', { text: e.mvp.votes + '표' }));
+            if (!e.mvp.open) return h('button', { class: 'leaf__mvp', type: 'button', 'aria-label': 'MVP 결과 보기: ' + e.title + ' ' + e.mvp.name, onclick: function () { openMvpResult(e); } },
+              '🏆 MVP', h('b', { text: e.mvp.name }), h('i', { text: e.mvp.votes + '표' }));
             if (!e.mvp.canVote) return e.mvp.total ? h('div', { class: 'leaf__mvp' }, '🏆 MVP', h('b', { text: '투표 중' }), h('i', { text: e.mvp.total + '표' })) : null;
             return h('button', { class: 'leaf__mvp' + (e.mvp.mine ? '' : ' leaf__mvp--todo'), type: 'button', 'aria-label': 'MVP 투표: ' + e.title, onclick: function () { openMvp(e); } },
               '🏆 MVP', h('b', { text: e.mvp.mine ? '내 표: ' + e.mvp.mine : '투표하기' }), e.mvp.total ? h('i', { text: e.mvp.total + '표' }) : null);
@@ -2086,6 +2095,24 @@
   }
 
   /* ---------- MVP 투표 ---------- */
+  /** 결정된 MVP: 표를 준 사람과 득표율 */
+  function openMvpResult(e) {
+    if (document.body.classList.contains('is-busy')) return;
+    setBusy(true);
+    call('mvpState', { eventId: e.id }).then(function (r) {
+      setBusy(false);
+      var x = r.result;
+      if (!x) { toast('아직 결정된 MVP가 없어요.'); return; }
+      ask({ title: '🏆 ' + dayLabel(r.date) + ' MVP', ok: false, body: h('div', null,
+        h('p', { class: 'mvp-res__name', text: x.name }),
+        h('p', { class: 'mvp-res__share' }, h('b', { text: x.votes + '표' }), ' / 전체 ' + x.total + '표', x.total ? h('span', { text: '  (득표율 ' + x.share + '%)' }) : null),
+        x.total ? h('div', { class: 'mvp-res__bar', 'aria-hidden': 'true' }, h('i', { style: 'width:' + Math.min(100, x.share) + '%' })) : null,
+        h('p', { class: 'fine', style: 'margin:12px 0 4px', text: '표를 준 사람 ' + (x.voters || []).length + '명' }),
+        (x.voters || []).length ? h('ul', { class: 'mvp-res__voters' }, x.voters.map(function (n) { return h('li', { text: n }); }))
+                                : h('p', { class: 'fine', text: '(기록된 표가 없어요)' })) });
+    }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
+  }
+
   function openMvp(ev) {
     if (document.body.classList.contains('is-busy')) return;
     setBusy(true);

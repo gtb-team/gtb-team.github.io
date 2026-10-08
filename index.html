@@ -340,6 +340,11 @@
   .names li.is-pending > * { border-style: dashed; opacity: .7; }
   .cmt--pending { opacity: .6; }
   @media (prefers-reduced-motion: reduce) { .done--new, .bar { animation: none; } }
+  .admin-links { display: flex; justify-content: center; align-items: center; gap: 10px; padding: 14px 16px 12px; border-bottom: 1px dashed var(--line); font-weight: 700; font-size: 15px; }
+  .admin-links a { color: var(--sat); text-decoration: none; padding: 4px 2px; }
+  .admin-links a:active, .admin-links a:hover { text-decoration: underline; }
+  .admin-links__sep { color: var(--line); font-weight: 400; }
+  .admin-links + .panel { border-top: 0; }
 </style>
 </head>
 <body>
@@ -1601,7 +1606,16 @@
     var preview = h('section', { class: 'panel' }, h('h2', { text: '회원 화면 미리보기' }),
       h('p', { text: '일반 회원에게 어떻게 보이는지 확인해요. 미리보기 동안은 운영진 권한도 꺼지므로 실제 회원과 똑같이 동작합니다. 위쪽 노란 띠의 [운영진 화면으로]로 돌아옵니다.' }),
       h('button', { class: 'btn btn--ghost', type: 'button', text: '회원 화면으로 보기', onclick: function () { S.asMember = true; S.tab = 'events'; S.scroll = { mode: 'anchor' }; load(); } }));
-    return [pending, recentView(d), profileView(), guestAdminView(), depositView(), billView(d), fillView(), preview, create, help];
+    var sheetLinks = [
+      ['참석관리', 'https://docs.google.com/spreadsheets/d/1EkbnAh2DTWCyX_BWEkJVzTjaoozUQOAZL1ixnQxKkEw/edit?usp=sharing'],
+      ['회원현황', 'https://docs.google.com/spreadsheets/d/1x_nYaCb0oebXcVQH2E8iZdZ2CT6nLSTJfRGewEjdkjM/edit?usp=sharing'],
+      ['가입신청', 'https://docs.google.com/spreadsheets/d/1r9xidcRqDNlPwkfBJsWbzZSm048gcApNig4aRe7F4L4/edit?usp=sharing']];
+    var links = h('nav', { class: 'admin-links', 'aria-label': '운영진 시트 바로가기' },
+      sheetLinks.map(function (l, i) {
+        return [i ? h('span', { class: 'admin-links__sep', 'aria-hidden': 'true', text: '|' }) : null,
+          h('a', { href: l[1], target: '_blank', rel: 'noopener noreferrer', text: l[0] })];
+      }));
+    return [links, pending, recentView(d), profileView(), guestAdminView(), depositView(), billView(d), fillView(), preview, create, help];
   }
 
   /* ---------- 운영진: 출석 체크(지난 모임) ---------- */

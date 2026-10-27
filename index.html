@@ -139,6 +139,7 @@
   .modal .mvp-res__name { margin: 0; font-size: 24px; font-weight: 800; color: var(--ink); }
   .modal .mvp-res__share { margin: 4px 0 8px; color: var(--ink-2); }
   .mvp-res__share b { color: var(--sun); font-size: 18px; }
+  .modal .fee-done__big { margin: 0 0 6px; font-size: 26px; font-weight: 800; color: var(--ink); }
   .mvp-res__bar { height: 8px; border-radius: 4px; background: var(--note-bg); overflow: hidden; }
   .mvp-res__bar i { display: block; height: 100%; background: var(--sun); }
   .leaf__mvp i { display: block; margin-top: 1px; font: 700 12px/1 var(--num); font-style: normal; color: var(--sun); }
@@ -2372,7 +2373,7 @@
     })));
     if (cur.note) panel.appendChild(h('p', { class: 'note note--warn', text: cur.note }));
     if (cur.mine) {
-      panel.appendChild(h('p', { class: 'note', text: mm + '월 신청 완료: ' + (cur.mine.days.join(', ') || '요일 없음') + ' / ' + won(cur.mine.total) + ' / ' + (cur.mine.confirmed ? '✓ 입금 확인됨' : '입금 ' + (cur.mine.paid ? '했다고 표시(확인 전)' : '전')) + ' (' + cur.mine.at.slice(5) + ')\n다시 신청하면 마지막 신청 내용으로 바뀌어요.' }));
+      panel.appendChild(h('p', { class: 'note', text: mm + '월 신청 완료: ' + (cur.mine.days.join(', ') || '요일 없음') + ' / ' + won(cur.mine.total) + ' / ' + (cur.mine.confirmed ? '✓ 입금 확인됨' : '입금 확인 전') + ' (' + cur.mine.at.slice(5) + ')\n다시 신청하면 마지막 신청 내용으로 바뀌어요.' }));
     }
 
     var p = f.prices, tr = function (a, b) { return h('tr', null, h('td', { text: a }), h('td', { text: b })); };
@@ -2403,19 +2404,28 @@
 
     panel.appendChild(h('h2', { text: '입금 안내' }));
     panel.appendChild(h('p', { class: 'fine', style: 'white-space:pre-line;margin:0 0 12px', text: '계좌  ' + f.account + '\n입금자명  ' + (f.payName || f.nickname) + mm + '  (이름+월, 입금이 자동으로 확인돼요)\n금액  신청한 금액 그대로\n기한  전월 ' + f.deadlineDay + '일까지 신청·입금' }));
-    panel.appendChild(h('div', { class: 'seg', role: 'group', 'aria-label': '입금 여부' },
-      h('button', { type: 'button', 'aria-pressed': String(pick.paid === true), text: '입금했어요', onclick: function () { pick.paid = true; render(); } }),
-      h('button', { type: 'button', 'aria-pressed': String(pick.paid === false), text: '24시간 안에 입금할게요', onclick: function () { pick.paid = false; render(); } })));
     panel.appendChild(h('button', { class: 'btn', type: 'button', text: mm + '월 회비 신청하기', onclick: function () {
       var days = Object.keys(pick.days).filter(function (w) { return pick.days[w]; });
       if (!days.length) { toast('요일을 하나 이상 골라 주세요.'); return; }
-      if (pick.paid === null) { toast('입금 여부를 골라 주세요.'); return; }
       if (document.body.classList.contains('is-busy')) return;
       setBusy(true);
-      call('feeApply', { month: cur.month, days: days, paid: pick.paid }).then(function (r) {
-        setBusy(false); S.fee = r; S.feePick = { month: cur.month, days: {}, paid: null }; render(); window.scrollTo(0, 0);
-        toast(mm + '월 회비를 신청했어요. ' + won(plan.total));
-      }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '신청하지 못했어요.'); });
+      var summary = plan.rows.map(function (x) { return x.label + '  ' + x.days; }).join('\n');
+      call('feeApply', { month: cur.month, days: days }).then(function (r) {
+        setBusy(false); S.fee = r; S.feePick = { month: cur.month, days: {}, paid: null };
+        // 신청 완료를 분명히 알린다: 완료 창 → [확인]을 누르면 참석신청 화면으로 넘어감
+        ask({ title: '✓ ' + mm + '월 회비 신청 완료', ok: '확인', cancel: '신청 내용 다시 보기',
+          body: h('div', { class: 'fee-done' },
+            h('p', { class: 'fee-done__big', text: won(plan.total) }),
+            h('p', { class: 'fine', style: 'white-space:pre-line;margin:0 0 10px', text: summary }),
+            h('p', { class: 'fine', style: 'white-space:pre-line;margin:0', text: '계좌  ' + f.account + '\n입금자명  ' + (f.payName || f.nickname) + mm + '\n입금이 확인되면 신청 내용에 "✓ 입금 확인됨"이 표시돼요.' })) })
+          .then(function (goHome) {
+            if (goHome) { S.view = 'main'; S.scroll = { mode: 'anchor' }; render(); toast(mm + '월 회비 신청이 접수됐어요'); }
+            else { render(); window.scrollTo(0, 0); }
+          });
+      }, function (err) {
+        setBusy(false);
+        if (!handleAuth(err)) ask({ title: '신청하지 못했어요', ok: false, cancel: '확인', text: (err.message || '잠시 뒤 다시 시도해 주세요.') + '\n\n신청이 되지 않았으니 다시 눌러 주세요.' });
+      });
     } }));
     mount(root);
   }

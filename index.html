@@ -139,6 +139,7 @@
   .modal .mvp-res__name { margin: 0; font-size: 24px; font-weight: 800; color: var(--ink); }
   .modal .mvp-res__share { margin: 4px 0 8px; color: var(--ink-2); }
   .mvp-res__share b { color: var(--sun); font-size: 18px; }
+  .pair select { flex: 1; min-width: 0; min-height: 42px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 15px; font-family: inherit; color: var(--ink); }
   .bn-img { display: block; width: 100%; height: auto; margin: 10px 0 8px; border: 1px solid var(--line); border-radius: 8px; }
   a.btn { display: flex; align-items: center; justify-content: center; text-decoration: none; }
   .modal .fee-done__big { margin: 0 0 6px; font-size: 26px; font-weight: 800; color: var(--ink); }
@@ -375,7 +376,7 @@
   var CAME_BACK = false;                       // 카카오 로그인에서 방금 돌아온 접속인지
   var DOW = ['일', '월', '화', '수', '목', '금', '토'];
   var app = document.getElementById('app');
-  var S = { token: '', data: null, tab: 'events', justApplied: '', form: null, editName: false, recent: null, view: 'main', fee: null, feePick: null, drafts: {}, asMember: false, contacts: {}, dep: null, frev: null, gadm: null, prof: null, draft: null, draftTimer: null, capPick: {},
+  var S = { token: '', data: null, tab: 'events', justApplied: '', form: null, editName: false, recent: null, view: 'main', fee: null, feePick: null, drafts: {}, asMember: false, contacts: {}, dep: null, frev: null, fdays: null, gadm: null, prof: null, draft: null, draftTimer: null, capPick: {},
     range: null, loadingMore: false, scroll: { mode: 'anchor' } };
   var memToken = '';
 
@@ -1616,7 +1617,7 @@
         return [i ? h('span', { class: 'admin-links__sep', 'aria-hidden': 'true', text: '|' }) : null,
           h('a', { href: l[1], target: '_blank', rel: 'noopener noreferrer', text: l[0] })];
       }));
-    return [links, pending, recentView(d), profileView(), guestAdminView(), depositView(), feeReviewView(), billView(d), fillView(), preview, create, help];
+    return [links, pending, recentView(d), profileView(), guestAdminView(), depositView(), feeReviewView(), feeDaysView(), billView(d), fillView(), preview, create, help];
   }
 
   /* ---------- 운영진: 출석 체크(지난 모임) ---------- */
@@ -1877,6 +1878,70 @@
     return box;
   }
 
+  /** 운영진: 회원별 월회비 지정요일 고치기·새로 넣기·해제. 마지막 줄이 정산에 쓰인다(기존 줄은 기록으로 남음) */
+  function feeDaysView() {
+    var box = h('section', { class: 'panel' }, h('h2', { text: '월회비 지정요일 관리' }));
+    function send(action, payload, msg) {
+      if (document.body.classList.contains('is-busy')) return;
+      setBusy(true);
+      call(action, payload).then(function (r) { setBusy(false); S.fdays = r; render(); if (msg) toast(msg); },
+        function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '처리하지 못했어요.'); });
+    }
+    if (!S.fdays) {
+      box.appendChild(h('p', { text: '회원의 월회비 지정요일을 운영진이 직접 고치거나, 신청 안 한 회원을 넣거나, 해제할 수 있어요. 정산은 마지막으로 정한 요일로 계산돼요(운영진이 정한 건 승인 없이 바로 반영).' }));
+      box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', text: '지정요일 목록 보기', onclick: function () { send('feeAdminState', {}); } }));
+      return box;
+    }
+    var r = S.fdays, mm = Number(r.month.slice(5, 7));
+    box.appendChild(h('div', { class: 'seg', role: 'group', 'aria-label': '달' }, r.months.map(function (x, i) {
+      return h('button', { type: 'button', 'aria-pressed': String(x === r.month), text: ['지난 달 ', '이번 달 ', '다음 달 '][i] + Number(x.slice(5, 7)) + '월',
+        onclick: function () { send('feeAdminState', { month: x }); } });
+    })));
+    function edit(who, cur) {
+      var pick = {}; (cur || []).forEach(function (d) { pick[d] = true; });
+      var grid = h('div', { class: 'days', role: 'group', 'aria-label': '요일 선택' }, ['월', '화', '수', '목', '금', '토', '일'].map(function (w) {
+        var b = h('button', { type: 'button', class: w === '토' ? 'is-sat' : w === '일' ? 'is-sun' : null, 'aria-pressed': String(!!pick[w]), text: w });
+        b.addEventListener('click', function () { pick[w] = !pick[w]; b.setAttribute('aria-pressed', String(pick[w])); });
+        return b;
+      }));
+      ask({ title: who.name + ' · ' + mm + '월 지정요일', ok: '저장', body: h('div', null, grid,
+          h('p', { class: 'fine', style: 'margin:8px 0 0', text: '평일 4일을 고르면 평일 전체(월~금)로 저장돼요. 금액은 요금제대로 다시 계산되고, 입금 확인 표시는 이어받아요. 금액이 바뀌면 차액은 따로 확인해 주세요.' })) })
+        .then(function (yes) {
+          if (!yes) return;
+          var days = Object.keys(pick).filter(function (d) { return pick[d]; });
+          if (!days.length) { toast('요일을 하나 이상 골라 주세요(지정을 없애려면 [해제]).'); return; }
+          send('feeAdminSet', { month: r.month, memberId: who.memberId, days: days }, who.name + ' 님 ' + mm + '월 지정요일을 저장했어요');
+        });
+    }
+    var shown = r.list.filter(function (x) { return !x.off; });
+    box.appendChild(h('h3', { text: mm + '월 지정요일 ' + shown.length + '명' }));
+    if (!r.list.length) box.appendChild(h('p', { class: 'fine', text: '이 달 신청이 없어요.' }));
+    r.list.forEach(function (x) {
+      var st = x.off ? '해제됨' : x.review === 'wait' ? '승인 대기' : x.review === 'no' ? '반려' : '';
+      box.appendChild(h('div', { class: 'dep' },
+        h('div', { class: 'dep__top' }, h('span', { class: 'dep__who', text: x.name }), h('span', { class: 'dep__amt', text: x.off ? '-' : won(x.amount) })),
+        h('p', { class: 'dep__sub', text: (x.off ? '지정 없음' : (x.days.join(', ') || '요일 없음') + (x.plan ? ' · ' + x.plan : '')) + (st ? ' · ' + st : '') + (x.note ? ' · ' + x.note : '') + ' · ' + x.at + ' · ' + (x.paid ? '입금 확인됨' : '입금 확인 전') }),
+        x.byName ? h('p', { class: 'dep__sub', text: '예전 설문에서 가져온 신청이라 여기서 고칠 수 없어요. 시트에서 직접 고쳐 주세요.' }) :
+        h('div', { class: 'dep__act' },
+          h('button', { class: 'btn', type: 'button', text: x.off ? '다시 지정' : '수정', onclick: function () { edit(x, x.off ? [] : x.days); } }),
+          x.off ? null : h('button', { class: 'btn btn--ghost', type: 'button', text: '해제', onclick: function () {
+            ask({ title: x.name + ' · ' + mm + '월 지정요일 해제', ok: '해제', danger: true, text: '해제하면 ' + mm + '월 정산에서 지정요일 없이(모든 참석 유료) 계산돼요. 입금한 회비가 있으면 따로 환불·정산해 주세요.' })
+              .then(function (yes) { if (yes) send('feeAdminSet', { month: r.month, memberId: x.memberId, days: [] }, x.name + ' 님 지정요일을 해제했어요'); });
+          } }))));
+    });
+    if (r.others.length) {
+      var sel = h('select', { 'aria-label': '회원 고르기' }, h('option', { value: '', text: '신청 안 한 회원 고르기' }), r.others.map(function (m) { return h('option', { value: m.memberId, text: m.name }); }));
+      box.appendChild(h('h3', { text: '회원 추가' }));
+      box.appendChild(h('div', { class: 'pair' }, sel, h('button', { class: 'btn btn--ghost', type: 'button', text: '지정요일 넣기', onclick: function () {
+        var m = r.others.filter(function (o) { return o.memberId === sel.value; })[0];
+        if (!m) { toast('회원을 먼저 골라 주세요.'); return; }
+        edit(m, []);
+      } })));
+    }
+    box.appendChild(h('p', { class: 'fine', style: 'margin-top:10px', text: '고친 뒤 이미 만든 정산이 있으면 월말 정산의 [그 달 정산]을 다시 눌러 주세요. 이번 달을 고치면 그 달 1일부터 지정요일로 계산돼요.' }));
+    return box;
+  }
+
   function linkDeposit(x, fees, send) {
     if (!fees.length) { toast('입금 확인 전인 회비 신청이 없어요.'); return; }
     var nm = String(x.name || '').replace(/[^가-힣A-Za-z]/g, '');
@@ -1946,16 +2011,22 @@
     var cols = [
       { k: 'name', t: '대화명', w: 2.3, left: true },
       { k: 'days', t: '지정요일', w: 2.1, left: true },
+      { k: 'free', t: '지정일', w: 1.2 },
       { k: 'wd', t: '평일', w: 1 }, { k: 'we', t: '주말', w: 1 }, { k: 'late', t: '급참', w: 1 },
-      { k: 'noshow', t: '노쇼', w: 1 }, { k: 'guest', t: '게스트', w: 1.2 },
+      { k: 'noshow', t: '노쇼', w: 1 }, { k: 'guest', t: '게스트', w: 1.4 },
       { k: 'etc', t: '기타', w: 1.6, money: true },
+      { k: 'month', t: '당월', w: 1.8, money: true, carryOnly: true },
+      { k: 'carry', t: '이월', w: 1.8, money: true },
       { k: 'total', t: '합계', w: 2, money: true, strong: true }
-    ].filter(function (c) { return c.left || c.strong || rows.some(function (x) { return x[c.k]; }); });
+    ];
+    var hasCarry = rows.some(function (x) { return x.carry; });
+    cols = cols.filter(function (c) { return c.left || c.strong || (c.carryOnly ? hasCarry : rows.some(function (x) { return x[c.k]; })); });
+    if (hasCarry) cols[cols.length - 1].t = '총계';
     var cell = function (c, x) { var v = x[c.k]; if (c.left) return String(v || ''); if (!v) return ''; return c.money ? String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : String(v); };
     var p = r.prices, man = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
     var legend = '평일 ' + man(p.weekday) + ' · 주말 ' + man(p.weekend) + ' · 급참 +' + man(p.late) + ' · 노쇼 ' + man(p.noshow) + ' · 게스트 ' + man(p.guest) + '원';
     var sum = rows.reduce(function (n, x) { return n + x.total; }, 0);
-    return { rows: rows, cols: cols, cell: cell, legend: legend, sum: sum, title: Number(r.month.slice(5)) + '월 후정산', sub: r.month.replace('-', '.') + ' · 모임 ' + r.events + '회 · 청구 ' + rows.filter(function (x) { return x.total; }).length + '명 · 합계 ' + man(sum) + '원' };
+    return { rows: rows, cols: cols, cell: cell, legend: legend, sum: sum, hasCarry: hasCarry, title: Number(r.month.slice(5)) + '월 후정산', sub: r.month.replace('-', '.') + ' · 모임 ' + r.events + '회 · 청구 ' + rows.filter(function (x) { return x.total; }).length + '명 · 합계 ' + man(sum) + '원' };
   }
 
   /** 캔버스로 PNG 만들기(1080px 폭). 줄이 많으면 여러 장으로 나눈다 */
@@ -1978,9 +2049,9 @@
       g.fillStyle = '#566273'; g.font = '600 24px ' + font; g.fillText(m.legend + ' (칸 숫자는 횟수)', PAD, HEAD - 6);
       var y = HEAD + 10, x;
       g.fillStyle = '#EEF1FF'; g.fillRect(PAD - 10, y, W - PAD * 2 + 20, TH - 8);
-      g.font = '800 27px ' + font; g.fillStyle = '#2B3FD6';
+      g.font = '800 ' + (m.cols.length > 9 ? 23 : 27) + 'px ' + font; g.fillStyle = '#2B3FD6';
       x = PAD;
-      m.cols.forEach(function (c) { var cw = c.w * unit; g.textAlign = c.left ? 'left' : 'right'; g.fillText(c.t, c.left ? x + 4 : x + cw - 6, y + 39); x += cw; });
+      m.cols.forEach(function (c) { var cw = c.w * unit; g.textAlign = c.left ? 'left' : 'right'; g.fillText(c.t, c.left ? x + 4 : x + cw - 6, y + 39, cw - 10); x += cw; });
       y += TH;
       part.forEach(function (row, i) {
         if (i % 2) { g.fillStyle = '#F6F7F9'; g.fillRect(PAD - 10, y - 4, W - PAD * 2 + 20, ROW); }
@@ -1998,11 +2069,11 @@
       g.textAlign = 'left'; g.fillStyle = '#566273'; g.font = '600 24px ' + font;
       if (pg === n - 1) {
         g.fillStyle = '#17202B'; g.font = '800 30px ' + font; g.textAlign = 'right';
-        g.fillText('합계 ' + String(m.sum).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '원', W - PAD, y + 44);
+        g.fillText((m.hasCarry ? '총계 ' : '합계 ') + String(m.sum).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '원', W - PAD, y + 44);
         g.textAlign = 'left'; g.fillStyle = '#566273'; g.font = '600 23px ' + font;
         if (account) g.fillText('입금 ' + account, PAD, y + 44);
       }
-      g.fillText('지정요일 참석·운영진은 무료 · 문의: 운영진', PAD, y + 84);
+      g.fillText('지정요일 참석·운영진은 무료' + (m.hasCarry ? ' · 이월 = 지난 정산 미납' : '') + ' · 문의: 운영진', PAD, y + 84);
       pages.push(cv.toDataURL('image/png'));
     }
     return pages;

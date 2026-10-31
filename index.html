@@ -139,6 +139,8 @@
   .modal .mvp-res__name { margin: 0; font-size: 24px; font-weight: 800; color: var(--ink); }
   .modal .mvp-res__share { margin: 4px 0 8px; color: var(--ink-2); }
   .mvp-res__share b { color: var(--sun); font-size: 18px; }
+  .bn-img { display: block; width: 100%; height: auto; margin: 10px 0 8px; border: 1px solid var(--line); border-radius: 8px; }
+  a.btn { display: flex; align-items: center; justify-content: center; text-decoration: none; }
   .modal .fee-done__big { margin: 0 0 6px; font-size: 26px; font-weight: 800; color: var(--ink); }
   .mvp-res__bar { height: 8px; border-radius: 4px; background: var(--note-bg); overflow: hidden; }
   .mvp-res__bar i { display: block; height: 100%; background: var(--sun); }
@@ -1921,7 +1923,107 @@
       h('p', { text: '끝난 모임만 계산해 스프레드시트에 "정산 (월)" 시트를 만들어요. 지정요일·운영진은 참석비 무료, 그 외 일 참석비·급참비·노쇼비·게스트비가 회원별로 합산됩니다. 다시 누르면 그 달 시트를 새로 채웁니다.' }),
       h('div', { class: 'pair' },
         h('button', { class: 'btn btn--ghost', type: 'button', text: prev + ' 정산', onclick: function () { run(prev); } }),
-        h('button', { class: 'btn btn--ghost', type: 'button', text: thisMonth + ' 정산', onclick: function () { run(thisMonth); } })));
+        h('button', { class: 'btn btn--ghost', type: 'button', text: thisMonth + ' 정산', onclick: function () { run(thisMonth); } })),
+      h('p', { class: 'fine', style: 'margin:14px 0 6px', text: '단톡방 공지용: 대화명·지정요일·참석·합계만 담은 모바일용 정산표(이미지)를 만들어요. 시트는 바꾸지 않아요.' }),
+      h('div', { class: 'pair' },
+        h('button', { class: 'btn', type: 'button', text: Number(prev.slice(5)) + '월 정산 공지 만들기', onclick: function () { openBillNotice(prev); } }),
+        h('button', { class: 'btn btn--ghost', type: 'button', text: Number(thisMonth.slice(5)) + '월 정산 공지 만들기', onclick: function () { openBillNotice(thisMonth); } })));
+  }
+
+  /* ---------- 정산 공지(단톡방용 이미지) ---------- */
+  function openBillNotice(month) {
+    if (document.body.classList.contains('is-busy')) return;
+    setBusy(true);
+    call('adminBillNotice', { month: month }).then(function (r) {
+      setBusy(false); S.bn = r; S.bnAll = false; S.view = 'billNotice'; S.scroll = { mode: 'top' }; render(); window.scrollTo(0, 0);
+    }, function (err) { setBusy(false); if (!handleAuth(err)) ask({ title: '정산표를 만들지 못했어요', text: err.message || '', ok: false, cancel: '확인' }); });
+  }
+
+  /** 보여 줄 줄과 칸: 청구 없는 사람(합계 0)은 기본으로 빼고, 모든 줄이 0인 칸은 뺀다 */
+  function billNoticeModel(r, all) {
+    var rows = r.rows.filter(function (x) { return all || x.total !== 0; })
+      .sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'ko'); });
+    var cols = [
+      { k: 'name', t: '대화명', w: 2.3, left: true },
+      { k: 'days', t: '지정요일', w: 2.1, left: true },
+      { k: 'wd', t: '평일', w: 1 }, { k: 'we', t: '주말', w: 1 }, { k: 'late', t: '급참', w: 1 },
+      { k: 'noshow', t: '노쇼', w: 1 }, { k: 'guest', t: '게스트', w: 1.2 },
+      { k: 'etc', t: '기타', w: 1.6, money: true },
+      { k: 'total', t: '합계', w: 2, money: true, strong: true }
+    ].filter(function (c) { return c.left || c.strong || rows.some(function (x) { return x[c.k]; }); });
+    var cell = function (c, x) { var v = x[c.k]; if (c.left) return String(v || ''); if (!v) return ''; return c.money ? String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : String(v); };
+    var p = r.prices, man = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+    var legend = '평일 ' + man(p.weekday) + ' · 주말 ' + man(p.weekend) + ' · 급참 +' + man(p.late) + ' · 노쇼 ' + man(p.noshow) + ' · 게스트 ' + man(p.guest) + '원';
+    var sum = rows.reduce(function (n, x) { return n + x.total; }, 0);
+    return { rows: rows, cols: cols, cell: cell, legend: legend, sum: sum, title: Number(r.month.slice(5)) + '월 후정산', sub: r.month.replace('-', '.') + ' · 모임 ' + r.events + '회 · 청구 ' + rows.filter(function (x) { return x.total; }).length + '명 · 합계 ' + man(sum) + '원' };
+  }
+
+  /** 캔버스로 PNG 만들기(1080px 폭). 줄이 많으면 여러 장으로 나눈다 */
+  function billNoticeImages(m, account) {
+    var W = 1080, PAD = 44, ROW = 58, HEAD = 230, TH = 64, FOOT = 110, PER = 36;
+    var font = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", "Malgun Gothic", sans-serif';
+    var pages = [], n = Math.max(1, Math.ceil(m.rows.length / PER));
+    var tw = m.cols.reduce(function (a, c) { return a + c.w; }, 0), unit = (W - PAD * 2) / tw;
+    for (var pg = 0; pg < n; pg++) {
+      var part = m.rows.slice(pg * PER, (pg + 1) * PER);
+      var H = HEAD + TH + part.length * ROW + FOOT;
+      var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      var g = cv.getContext('2d');
+      g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#2B3FD6'; g.fillRect(0, 0, W, HEAD - 40);
+      g.fillStyle = '#FFFFFF'; g.textBaseline = 'alphabetic';
+      g.font = '800 30px ' + font; g.fillText('GTB', PAD, 64);
+      g.font = '900 64px ' + font; g.fillText(m.title + (n > 1 ? '  (' + (pg + 1) + '/' + n + ')' : ''), PAD, 140);
+      g.font = '600 26px ' + font; g.fillStyle = 'rgba(255,255,255,.9)'; g.fillText(m.sub, PAD, 178);
+      g.fillStyle = '#566273'; g.font = '600 24px ' + font; g.fillText(m.legend + ' (칸 숫자는 횟수)', PAD, HEAD - 6);
+      var y = HEAD + 10, x;
+      g.fillStyle = '#EEF1FF'; g.fillRect(PAD - 10, y, W - PAD * 2 + 20, TH - 8);
+      g.font = '800 27px ' + font; g.fillStyle = '#2B3FD6';
+      x = PAD;
+      m.cols.forEach(function (c) { var cw = c.w * unit; g.textAlign = c.left ? 'left' : 'right'; g.fillText(c.t, c.left ? x + 4 : x + cw - 6, y + 39); x += cw; });
+      y += TH;
+      part.forEach(function (row, i) {
+        if (i % 2) { g.fillStyle = '#F6F7F9'; g.fillRect(PAD - 10, y - 4, W - PAD * 2 + 20, ROW); }
+        x = PAD;
+        m.cols.forEach(function (c) {
+          var cw = c.w * unit, v = m.cell(c, row);
+          g.fillStyle = c.strong ? '#17202B' : c.k === 'days' ? '#0B7F57' : '#17202B';
+          g.font = (c.strong || c.k === 'name' ? '800 ' : '600 ') + (c.k === 'days' && v.length > 5 ? 22 : 28) + 'px ' + font;
+          g.textAlign = c.left ? 'left' : 'right';
+          g.fillText(v, c.left ? x + 4 : x + cw - 6, y + 36, cw - 8);
+          x += cw;
+        });
+        y += ROW;
+      });
+      g.textAlign = 'left'; g.fillStyle = '#566273'; g.font = '600 24px ' + font;
+      if (pg === n - 1) {
+        g.fillStyle = '#17202B'; g.font = '800 30px ' + font; g.textAlign = 'right';
+        g.fillText('합계 ' + String(m.sum).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '원', W - PAD, y + 44);
+        g.textAlign = 'left'; g.fillStyle = '#566273'; g.font = '600 23px ' + font;
+        if (account) g.fillText('입금 ' + account, PAD, y + 44);
+      }
+      g.fillText('지정요일 참석·운영진은 무료 · 문의: 운영진', PAD, y + 84);
+      pages.push(cv.toDataURL('image/png'));
+    }
+    return pages;
+  }
+
+  function renderBillNotice() {
+    var r = S.bn, m = billNoticeModel(r, S.bnAll);
+    var back = h('button', { class: 'linkbtn', type: 'button', text: '운영진 메뉴로', onclick: function () { S.view = 'main'; S.scroll = { mode: 'anchor' }; render(); } });
+    var root = h('div', { class: 'sheet' },
+      h('div', { class: 'stick', id: 'stick' }, h('header', { class: 'top' }, h('div', { class: 'top__text' }, h('h1', { text: m.title + ' 공지' }), h('p', { text: m.sub })), back)));
+    var panel = h('section', { class: 'panel' });
+    root.appendChild(panel);
+    if (r.warningCount) panel.appendChild(h('p', { class: 'note note--warn', text: '확인이 필요한 항목이 ' + r.warningCount + '건 있어요. 공지 전에 [' + r.month + ' 정산]을 눌러 시트 아래쪽 경고를 확인하세요.' }));
+    panel.appendChild(h('label', { class: 'pick' }, h('input', { type: 'checkbox', checked: S.bnAll, onchange: function (e) { S.bnAll = e.target.checked; render(); } }),
+      h('span', { text: '청구 없는 회원(합계 0원)도 넣기' })));
+    panel.appendChild(h('p', { class: 'fine', style: 'margin:8px 0', text: '아래 이미지를 길게 눌러 저장한 뒤 단톡방에 올리세요. (PC는 [이미지 저장])' }));
+    billNoticeImages(m, r.account).forEach(function (src, i, all) {
+      panel.appendChild(h('img', { class: 'bn-img', src: src, alt: m.title + (all.length > 1 ? ' ' + (i + 1) + '/' + all.length : '') }));
+      panel.appendChild(h('a', { class: 'btn btn--ghost', href: src, download: 'GTB_' + r.month + '_정산' + (all.length > 1 ? '_' + (i + 1) : '') + '.png', text: '이미지 저장' + (all.length > 1 ? ' (' + (i + 1) + '/' + all.length + ')' : '') }));
+    });
+    mount(root);
   }
 
   /* ---------- 팀 구성: 자동 구성(누구나). 계산은 서버(teamsAuto)가 하고 명단만 받는다 ---------- */
@@ -2485,6 +2587,7 @@
     var d = S.data;
     if (!d) return;
     if (S.view === 'fee' && S.fee && d.stage === 'ready') return renderFee();
+    if (S.view === 'billNotice' && S.bn && d.stage === 'ready') return renderBillNotice();
     if (S.view === 'draft' && S.draft && d.stage === 'ready') return renderDraft();
     if (S.view === 'teams' && S.team && d.stage === 'ready') return renderTeams();
     if (d.stage === 'register' || S.editName) return renderRegister(d);

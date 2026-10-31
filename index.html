@@ -1924,7 +1924,7 @@
       h('div', { class: 'pair' },
         h('button', { class: 'btn btn--ghost', type: 'button', text: prev + ' 정산', onclick: function () { run(prev); } }),
         h('button', { class: 'btn btn--ghost', type: 'button', text: thisMonth + ' 정산', onclick: function () { run(thisMonth); } })),
-      h('p', { class: 'fine', style: 'margin:14px 0 6px', text: '단톡방 공지용: 대화명·지정요일·참석·합계만 담은 모바일용 정산표(이미지)를 만들어요. 시트는 바꾸지 않아요.' }),
+      h('p', { class: 'fine', style: 'margin:14px 0 6px', text: '단톡방 공지용: 이미 만든 "정산 (월)" 시트를 그대로 읽어(손으로 고친 금액 포함) 대화명·지정요일·참석·합계만 담은 모바일용 정산표 이미지를 만들어요. 정산을 다시 누르면 손으로 고친 내용은 지워지니 주의하세요.' }),
       h('div', { class: 'pair' },
         h('button', { class: 'btn', type: 'button', text: Number(prev.slice(5)) + '월 정산 공지 만들기', onclick: function () { openBillNotice(prev); } }),
         h('button', { class: 'btn btn--ghost', type: 'button', text: Number(thisMonth.slice(5)) + '월 정산 공지 만들기', onclick: function () { openBillNotice(thisMonth); } })));
@@ -2015,7 +2015,8 @@
       h('div', { class: 'stick', id: 'stick' }, h('header', { class: 'top' }, h('div', { class: 'top__text' }, h('h1', { text: m.title + ' 공지' }), h('p', { text: m.sub })), back)));
     var panel = h('section', { class: 'panel' });
     root.appendChild(panel);
-    if (r.warningCount) panel.appendChild(h('p', { class: 'note note--warn', text: '확인이 필요한 항목이 ' + r.warningCount + '건 있어요. 공지 전에 [' + r.month + ' 정산]을 눌러 시트 아래쪽 경고를 확인하세요.' }));
+    panel.appendChild(h('p', { class: 'note', text: '"' + r.sheet + '" 시트 기준' + (r.madeAt ? ' (정산 만든 시각 ' + r.madeAt + ')' : '') + '. 시트에서 손으로 고친 금액이 그대로 들어가요. 시트를 고쳤으면 이 화면을 다시 열어 주세요.' }));
+    if (r.warningCount) panel.appendChild(h('p', { class: 'note note--warn', text: '확인이 필요한 항목이 ' + r.warningCount + '건 있어요. 공지 전에 "' + r.sheet + '" 시트 아래쪽 경고를 확인하세요.' }));
     panel.appendChild(h('label', { class: 'pick' }, h('input', { type: 'checkbox', checked: S.bnAll, onchange: function (e) { S.bnAll = e.target.checked; render(); } }),
       h('span', { text: '청구 없는 회원(합계 0원)도 넣기' })));
     panel.appendChild(h('p', { class: 'fine', style: 'margin:8px 0', text: '아래 이미지를 길게 눌러 저장한 뒤 단톡방에 올리세요. (PC는 [이미지 저장])' }));

@@ -79,6 +79,18 @@
   .rank b { flex: 1; font-weight: 700; }
   .rank i { font: 700 18px/1 var(--num); font-style: normal; color: var(--sun); }
   .rank li.is-top b, .rank li.is-top i { color: var(--sun); }
+  .rank--page { margin: 0 0 18px; }
+  .rank--page i small { font: 600 12px/1 var(--body); color: var(--ink-2); }
+  .rank li.is-me { background: var(--go-bg); border-radius: 6px; }
+  .rank li.rank__gap { justify-content: center; color: var(--ink-2); border-top: 0; padding: 2px; }
+  .rank-month { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
+  .rank-month b { font-size: 18px; font-weight: 800; }
+  .rank-month .iconbtn { font-size: 22px; line-height: 1; }
+  .rank-month .iconbtn:disabled { opacity: .3; }
+  .rank-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0 0 14px; }
+  .rank-tabs button { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 56px; border: 1px solid var(--line); border-radius: 10px; background: none; font-size: 13px; font-weight: 700; color: var(--ink-2); }
+  .rank-tabs button[aria-selected="true"] { border-color: var(--ink); color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .rank-tabs__ico { font-size: 20px; line-height: 1; }
   .leaf__head { position: relative; }                                   /* 도장은 날짜 글씨 묶음 기준으로 붙는다 */
   .leaf--stamped { margin-bottom: 4px; }
   .leaf--stamped .leaf__head { margin-bottom: 28px; }                   /* 도장 자리: 아래 팀구성·팀장전·MVP 버튼과 겹치지 않게(기울인 도장 모서리까지) */
@@ -367,7 +379,7 @@
   var KEY = REMOTE ? 'gtb.token' : 'moim.session.v1';
   var TRIED = 'gtb.autoTried';                 // 이번 접속에서 카카오 자동 로그인을 이미 시도했는지(반복 방지)
   var FASTKEY = 'gtb.fast';                    // 빠른 읽기(Cloudflare Worker) 주소. Apps Script 가 알려 주면 기억해 둔다
-  var READ_FAST = { state: 1, moreEvents: 1, draftState: 1, teamsState: 1, mvpState: 1, freethrowRank: 1, contactOne: 1, contacts: 1 };
+  var READ_FAST = { state: 1, moreEvents: 1, draftState: 1, teamsState: 1, mvpState: 1, freethrowRank: 1, rankState: 1, contactOne: 1, contacts: 1 };
   function fastUrl() { try { return REMOTE ? (window.localStorage.getItem(FASTKEY) || '') : ''; } catch (e) { return ''; } }
   function rememberFast(u) {
     if (!REMOTE || typeof u !== 'string') return;
@@ -857,6 +869,85 @@
     return svg;
   }
 
+  function trophyIcon() {
+    var ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', '20'); svg.setAttribute('height', '20'); svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('aria-hidden', 'true');
+    ['M6 3h8v4a4 4 0 0 1-8 0V3z', 'M6 5H3.5a2.5 2.5 0 0 0 3 3M14 5h2.5a2.5 2.5 0 0 1-3 3', 'M10 11v3M7 17h6M8 14h4v3H8z'].forEach(function (d) {
+      var p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', d); p.setAttribute('fill', 'none'); p.setAttribute('stroke', 'currentColor');
+      p.setAttribute('stroke-width', '1.8'); p.setAttribute('stroke-linecap', 'round'); p.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(p);
+    });
+    return svg;
+  }
+
+  /* ---------- 이달의 순위 ---------- */
+  var RANK_TABS = [
+    { k: 'mvp', ico: '🏆', t: 'MVP' }, { k: 'came', ico: '🏃', t: '참석왕' }, { k: 'noshow', ico: '🙈', t: '노쇼' }, { k: 'ft', ico: '🥤', t: '꼴찌' }];
+  function openRank(month, tab) {
+    if (document.body.classList.contains('is-busy')) return;
+    S.rankTab = tab || S.rankTab || 'mvp';
+    var want = month || (S.data && S.data.today ? S.data.today.slice(0, 7) : '');
+    setBusy(true);
+    call('rankState', { month: want }).then(function (r) {
+      setBusy(false); S.rank = r; S.view = 'rank'; S.scroll = { mode: 'top' }; render(); window.scrollTo(0, 0);
+    }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '순위를 불러오지 못했어요.'); });
+  }
+  /** 순위 목록: 같은 값은 같은 등수. 10위까지 보여 주고, 내가 그 밖이면 내 줄을 따로 */
+  function rankList(list, fmt, me) {
+    if (!list.length) return h('p', { class: 'fine', style: 'margin:6px 0 14px', text: '아직 기록이 없어요.' });
+    var ranked = list.map(function (x, i) { var r = 1; for (var j = 0; j < i; j++) if (list[j].v > x.v) r++; return { r: r, x: x }; });
+    var top = ranked.length ? ranked[0].x.v : 0;
+    var row = function (e) {
+      return h('li', { class: (e.x.v === top ? 'is-top' : '') + (e.x.name === me ? ' is-me' : '') },
+        h('span', { class: 'no', text: String(e.r) }), h('b', { text: e.x.name + (e.x.name === me ? ' (나)' : '') }), fmt(e.x));
+    };
+    var shown = ranked.filter(function (e) { return e.r <= 10; });
+    var mine = ranked.filter(function (e) { return e.x.name === me && e.r > 10; })[0];
+    return h('ol', { class: 'rank rank--page' }, shown.map(row), mine ? [h('li', { class: 'rank__gap', 'aria-hidden': 'true', text: '⋯' }), row(mine)] : null);
+  }
+  function renderRank() {
+    var r = S.rank, tab = S.rankTab || 'mvp', me = S.data && S.data.me ? S.data.me.nickname : '';
+    var mm = Number(r.month.slice(5, 7)), i = r.months.indexOf(r.month);
+    var older = r.months[i + 1], newer = i > 0 ? r.months[i - 1] : null;
+    var back = h('button', { class: 'linkbtn', type: 'button', text: '참석신청으로', onclick: function () { S.view = 'main'; S.scroll = { mode: 'anchor' }; render(); } });
+    var root = h('div', { class: 'sheet' },
+      h('div', { class: 'stick', id: 'stick' }, h('header', { class: 'top' },
+        h('div', { class: 'top__text' }, h('h1', { text: '이달의 순위' }), h('p', { text: r.month.replace('-', '.') + ' · 모임 ' + r.events + '회' })), back)));
+    var panel = h('section', { class: 'panel' });
+    root.appendChild(panel);
+    panel.appendChild(h('div', { class: 'rank-month' },
+      h('button', { class: 'iconbtn', type: 'button', 'aria-label': '이전 달', disabled: !older, onclick: function () { if (older) openRank(older); } }, '‹'),
+      h('b', { text: r.month.slice(0, 4) + '년 ' + mm + '월' }),
+      h('button', { class: 'iconbtn', type: 'button', 'aria-label': '다음 달', disabled: !newer, onclick: function () { if (newer) openRank(newer); } }, '›')));
+    panel.appendChild(h('div', { class: 'rank-tabs', role: 'tablist' }, RANK_TABS.map(function (t) {
+      return h('button', { type: 'button', role: 'tab', 'aria-selected': String(t.k === tab), onclick: function () { S.rankTab = t.k; render(); } },
+        h('span', { class: 'rank-tabs__ico', 'aria-hidden': 'true', text: t.ico }), h('span', { text: t.t }));
+    })));
+    var num = function (v) { return String(v); };
+    if (tab === 'mvp') {
+      panel.appendChild(h('h2', { text: '받은 표' }));
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: mm + '월 모임에서 MVP 투표로 받은 표를 모두 더했어요.' }));
+      panel.appendChild(rankList(r.votes, function (x) { return h('i', { text: x.v + '표' }); }, me));
+      panel.appendChild(h('h2', { text: 'MVP 점수' }));
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: 'MVP로 뽑힌 점수: 단독 1점, 공동 2명 0.5점, 3명 0.3점, 4명 0.2점. 출결이 확정된 모임만 세요(' + r.mvpEvents + '회).' }));
+      panel.appendChild(rankList(r.mvp, function (x) { return h('i', null, num(x.v) + '점', h('small', { text: ' ' + x.n + '회' })); }, me));
+    } else if (tab === 'came') {
+      panel.appendChild(h('h2', { text: '참석 횟수' }));
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: '실제로 나온 횟수예요(참석·대기참·연습, 노쇼 제외). ' + mm + '월 모임 ' + r.events + '회 중.' }));
+      panel.appendChild(rankList(r.came, function (x) { return h('i', { text: x.v + '회' }); }, me));
+    } else if (tab === 'noshow') {
+      panel.appendChild(h('h2', { text: '노쇼' }));
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: '노쇼 횟수 순, 같으면 노쇼율(노쇼 ÷ 확정·연습 신청) 순이에요.' }));
+      panel.appendChild(rankList(r.noshow, function (x) { return h('i', null, x.v + '회', h('small', { text: ' ' + x.rate + '% (신청 ' + x.signed + ')' })); }, me));
+    } else {
+      panel.appendChild(h('h2', { text: '자유투 꼴찌' }));
+      panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: '꼴찌 점수예요. 혼자 1점, 공동 2명 0.5점, 3명 0.3점.' }));
+      panel.appendChild(rankList(r.ft, function (x) { return h('i', { text: num(x.v) + '점' }); }, me));
+    }
+    mount(root);
+  }
+
   function refreshIcon() {
     var ns = 'http://www.w3.org/2000/svg';
     var svg = document.createElementNS(ns, 'svg');
@@ -913,6 +1004,7 @@
         h('div', { class: 'top__text' }, h('h1', { text: d.clubName }),
           h('p', null, h('b', { text: d.me.nickname }), ' 님 이름으로 신청돼요')),
         h('div', { class: 'top__acts' },
+          h('button', { class: 'iconbtn', type: 'button', 'aria-label': '이달의 순위', title: '이달의 순위', onclick: function () { openRank(); } }, trophyIcon()),
           h('button', { class: 'iconbtn', type: 'button', 'aria-label': '새로고침', title: '새로고침', onclick: function () { load().then(function () { toast('최신 상태예요.'); }); } }, refreshIcon()),
           h('button', { class: 'feelink', type: 'button', text: '월회비 신청', onclick: openFee }))));
     if (S.asMember) {
@@ -2660,6 +2752,7 @@
     if (!d) return;
     if (S.view === 'fee' && S.fee && d.stage === 'ready') return renderFee();
     if (S.view === 'billNotice' && S.bn && d.stage === 'ready') return renderBillNotice();
+    if (S.view === 'rank' && S.rank && d.stage === 'ready') return renderRank();
     if (S.view === 'draft' && S.draft && d.stage === 'ready') return renderDraft();
     if (S.view === 'teams' && S.team && d.stage === 'ready') return renderTeams();
     if (d.stage === 'register' || S.editName) return renderRegister(d);

@@ -80,6 +80,16 @@
   .rank i { font: 700 18px/1 var(--num); font-style: normal; color: var(--sun); }
   .rank li.is-top b, .rank li.is-top i { color: var(--sun); }
   .rank--page { margin: 0 0 18px; }
+  .rules { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+  .rules summary { cursor: pointer; font-size: 14px; font-weight: 700; }
+  .rules--warn { border-color: var(--sun); }
+  .rules--warn summary { color: var(--sun); }
+  .rules__list { list-style: none; margin: 8px 0 0; padding: 0; }
+  .rules__list li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .rules__list li:first-child { border-top: 0; }
+  .rules__list li span { color: var(--ink-2); font-weight: 600; }
+  .rules__list li.is-bad b, .rules__list li.is-bad span { color: var(--sun); }
+  .rules__edit { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: 14px; resize: vertical; }
   .rank--page i small { font: 600 12px/1 var(--body); color: var(--ink-2); }
   .rank li.is-me { background: var(--go-bg); border-radius: 6px; }
   .rank li.rank__gap { justify-content: center; color: var(--ink-2); border-top: 0; padding: 2px; }
@@ -2219,6 +2229,51 @@
     return parts.join(' · ');
   }
 
+  /**
+   * 팀 규칙(접기/펴기): 이 모임 명단에 두 사람이 모두 있는 규칙만. 지금 팀에서 어긴 규칙은 ⚠ 로.
+   * 운영진은 여기서 규칙을 고칠 수 있다([설정] 시트 "팀 구성 규칙"에 저장).
+   */
+  function teamRulesBox(T, colors) {
+    var r = T.r, all = r.rules || [];
+    var on = all.filter(function (x) { return T.sel[x.refA] && T.sel[x.refB]; });
+    var teamOf = {};
+    colors.forEach(function (c) { T.teams[c].forEach(function (x) { if (x.ref) teamOf[x.ref] = c; }); });
+    var broken = on.filter(function (x) {
+      var a = teamOf[x.refA], b = teamOf[x.refB];
+      return a && b && (x.type === 'apart' ? a === b : a !== b);
+    });
+    if (!on.length && !r.staff) return h('div');
+    var box = h('details', { class: 'rules' + (broken.length ? ' rules--warn' : '') });
+    if (T.rulesOpen || broken.length) box.open = true;
+    box.addEventListener('toggle', function () { T.rulesOpen = box.open; });
+    box.appendChild(h('summary', { text: (broken.length ? '⚠ ' : '🔒 ') + '팀 규칙 ' + on.length + '개 적용' + (broken.length ? ' · ' + broken.length + '개 어김' : '') }));
+    if (on.length) box.appendChild(h('ul', { class: 'rules__list' }, on.map(function (x) {
+      var bad = broken.indexOf(x) >= 0;
+      return h('li', { class: bad ? 'is-bad' : '' }, h('b', { text: x.a + ' · ' + x.b }),
+        h('span', { text: (x.type === 'apart' ? '항상 다른 팀' : '항상 같은 팀') + (bad ? ' ⚠' : '') }));
+    })));
+    else box.appendChild(h('p', { class: 'fine', style: 'margin:6px 0', text: '이 모임 명단에 해당하는 규칙이 없어요.' }));
+    box.appendChild(h('p', { class: 'fine', style: 'margin:6px 0 0', text: '[자동 구성]은 이 규칙을 지켜서 나눠요. 손으로 옮기다 어기면 ⚠ 로 알려 줘요.' }));
+    if (r.staff) {
+      var ta = h('textarea', { rows: '2', class: 'rules__edit', 'aria-label': '팀 규칙 고치기', placeholder: '예: 김도현 ≠ 김대섭; 홍길동 = 김철수' });
+      ta.value = r.rulesText || '';
+      box.appendChild(h('p', { class: 'fine', style: 'margin:10px 0 4px', text: '운영진: 규칙 고치기 — "갑 ≠ 을" 다른 팀, "갑 = 을" 같은 팀, 여러 개는 ; 로 구분(대화명 그대로).' }));
+      box.appendChild(ta);
+      box.appendChild(h('button', { class: 'btn btn--ghost', type: 'button', text: '규칙 저장', style: 'margin-top:6px', onclick: function () {
+        if (document.body.classList.contains('is-busy')) return;
+        setBusy(true);
+        call('teamRulesSave', { text: ta.value }).then(function (x) {
+          setBusy(false);
+          r.rulesText = x.text;
+          var players = r.players, refOf = function (n) { var p = players.filter(function (q) { return q.name.replace(/\s+/g, '') === n.replace(/\s+/g, ''); })[0]; return p ? p.ref : ''; };
+          r.rules = x.rules.map(function (q) { return { type: q.type, a: q.a, b: q.b, refA: refOf(q.a), refB: refOf(q.b) }; }).filter(function (q) { return q.refA && q.refB; });
+          T.rulesOpen = true; render(); toast('팀 규칙을 저장했어요');
+        }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '저장하지 못했어요.'); });
+      } }));
+    }
+    return box;
+  }
+
   /* ---------- 팀 구성(누구나 나눠서 저장) ---------- */
   var TEAM_COLORS = ['검정', '흰색', '주황'];
   function openTeams(ev) {
@@ -2312,6 +2367,7 @@
       } });
     })));
     panel.appendChild(h('p', { class: 'fine', style: 'margin:0 0 4px', text: '팀을 눌러 고른 뒤, 아래 참석자 이름을 누르면 그 팀에 들어가요. 팀 안의 이름을 누르면 빠져요. 안 넣은 사람이 있어도 괜찮아요.' }));
+    panel.appendChild(teamRulesBox(T, colors));
     // 팀에 넣을 사람 고르기: 연습·노쇼는 기본으로 빠져 있고, 급참·확정은 들어 있다. 체크를 바꿔 조정
     var selCount = r.players.filter(function (p) { return T.sel[p.ref]; }).length;
     panel.appendChild(h('details', { class: 'adjust' },
@@ -2343,6 +2399,7 @@
         call('teamsAuto', { eventId: r.eventId, mode: T.mode, refs: refs, avoid: Object.keys(T.seen) }).then(function (res) {
           setBusy(false);
           T.seen[res.key] = true; T.noInfo = res.noInfo;
+          if (res.ruleBreaks) toast('팀 규칙 ' + res.ruleBreaks + '개는 지킬 수 없었어요(인원 등). 위 팀 규칙을 확인해 주세요.');
           if (T.histIdx != null && T.histIdx < T.hist.length - 1) T.hist = T.hist.slice(0, T.histIdx + 1);
           T.hist.push(res.teams); T.histIdx = T.hist.length - 1;
           applyAuto(res.teams);

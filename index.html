@@ -2276,6 +2276,13 @@
   }
 
   /** 이름 옆 작은 포지션 표시(회원 정보의 1~5) */
+  /** 포지션 5 → 1 순(부포지션 "2/3"은 앞 번호 기준), 포지션 없는 사람은 맨 뒤. 같은 포지션은 원래 순서 */
+  function posSort(list, map, keyOf) {
+    var main = function (x) { var t = map ? map[keyOf ? keyOf(x) : x.ref] : ''; var n = parseInt(String(t || ''), 10); return n >= 1 && n <= 5 ? n : 0; };
+    return list.map(function (x, i) { return { x: x, i: i, p: main(x) }; })
+      .sort(function (a, b) { return (b.p - a.p) || (a.i - b.i); })
+      .map(function (e) { return e.x; });
+  }
   function posTag(map, ref) { var t = map && ref ? map[ref] : ''; return t ? h('small', { class: 'pos', text: t, 'aria-label': '포지션 ' + t }) : null; }
 
   /* ---------- 팀 구성(누구나 나눠서 저장) ---------- */
@@ -2332,7 +2339,7 @@
         h('span', { text: done ? r.saved.doneBy + ' 님이 ' + r.saved.doneAt.slice(5, 16) + '에 확정 · ' + r.saved.by + ' 님이 저장' : r.saved.by + ' 님이 ' + r.saved.at.slice(5, 16) + '에 저장' })));
       panel.appendChild(h('div', { class: 'teams' + (T.mode === 2 ? ' teams--2' : '') }, colors.map(function (c) {
         return h('div', { class: 'team' }, h('p', { class: 'team__name' }, dot(c), c + ' ' + T.teams[c].length + '명'),
-          h('ol', null, T.teams[c].map(function (x) { return h('li', null, x.name, posTag(r.pos, x.ref), x.ref && T.noshowRefs && T.noshowRefs[x.ref] ? h('span', { class: 'ns', text: ' 노쇼' }) : null); })));
+          h('ol', null, (r.staff ? teamOrder(T.teams[c], r.profiles || {}) : posSort(T.teams[c], r.pos)).map(function (x) { return h('li', null, x.name, posTag(r.pos, x.ref), x.ref && T.noshowRefs && T.noshowRefs[x.ref] ? h('span', { class: 'ns', text: ' 노쇼' }) : null); })));
       })));
       var left = r.players.filter(function (p) { return p.base && !assigned[p.ref]; });
       if (left.length) panel.appendChild(h('p', { class: 'fine', text: '팀에 안 들어간 참석자: ' + left.map(function (p) { return p.name; }).join(', ') }));
@@ -2377,7 +2384,7 @@
     panel.appendChild(h('details', { class: 'adjust' },
       h('summary', { text: '팀구성 대상 ' + selCount + '명 / 신청 ' + r.players.length + '명 (눌러서 조정)' }),
       h('p', { class: 'fine', style: 'margin:6px 0', text: '연습 신청과 노쇼는 기본으로 빠져 있고, 급참은 들어 있어요. 체크를 풀면 팀구성에서 제외돼요(팀에 들어가 있었으면 거기서도 빠져요). 명단에 없는 사람은 아래 "명단에 없는 이름"으로 넣어요.' }),
-      r.players.map(function (p) {
+      posSort(r.players, r.pos).map(function (p) {
         var cb = h('input', { type: 'checkbox', checked: !!T.sel[p.ref], 'aria-label': p.name + ' 팀 나누기에 포함' });
         cb.addEventListener('change', function () {
           T.sel[p.ref] = cb.checked;
@@ -2393,7 +2400,7 @@
       })));
     {                                                    // 자동 구성(누구나): 실력·포지션·키로 서버가 나눠 명단만 돌려준다
       var info = r.profiles || {};
-      if (r.staff) colors.forEach(function (c) { T.teams[c] = teamOrder(T.teams[c], info); });   // 운영진은 포지션 5→1, 실력순으로 바로 정렬(회원은 서버가 정렬해 준 순서)
+      colors.forEach(function (c) { T.teams[c] = r.staff ? teamOrder(T.teams[c], info) : posSort(T.teams[c], r.pos); });   // 위에서부터 포지션 5→1(운영진은 같은 포지션이면 실력순)   // 운영진은 포지션 5→1, 실력순으로 바로 정렬(회원은 서버가 정렬해 준 순서)
       var autoRun = function () {
         var refs = r.players.filter(function (p) { return p.ref && T.sel[p.ref]; }).map(function (p) { return p.ref; });
         if (refs.length < 2) { toast('나눌 참석자가 2명 이상 있어야 해요.'); return; }
@@ -2433,7 +2440,7 @@
           return h('li', null, h('button', { type: 'button', 'aria-label': x.name + ' 빼기', onclick: function () { T.teams[c].splice(i, 1); render(); } }, x.name, posTag(r.pos, x.ref)));
         })));
     })));
-    var free = r.players.filter(function (p) { return T.sel[p.ref] && !assigned[p.ref]; });
+    var free = posSort(r.players.filter(function (p) { return T.sel[p.ref] && !assigned[p.ref]; }), r.pos);
     panel.appendChild(h('h2', { text: '안 나눈 참석자 ' + free.length + '명' }));
     if (free.length) panel.appendChild(h('p', { class: 'fine', style: 'margin:0', text: '이름을 누르면 ' + T.active + ' 팀에 들어가요. 오른쪽 ✕는 팀구성에서 제외.' }));
     panel.appendChild(h('ul', { class: 'pool' }, free.map(function (p) {
@@ -2442,7 +2449,7 @@
           p.name + (p.guest ? ' (게스트)' : ''), posTag(r.pos, p.ref), p.noshow ? h('span', { class: 'ns', text: '노쇼' }) : null),
         h('button', { class: 'pool__x', type: 'button', 'aria-label': p.name + ' 팀구성에서 제외', text: '✕', onclick: function () { T.sel[p.ref] = false; render(); } }));
     })));
-    var excluded = r.players.filter(function (p) { return !T.sel[p.ref]; });
+    var excluded = posSort(r.players.filter(function (p) { return !T.sel[p.ref]; }), r.pos);
     if (excluded.length) {
       panel.appendChild(h('p', { class: 'fine', style: 'margin:10px 0 4px', text: '팀구성에서 제외 ' + excluded.length + '명 (누르면 다시 넣기)' }));
       panel.appendChild(h('ul', { class: 'pool pool--out' }, excluded.map(function (p) {
@@ -2660,12 +2667,12 @@
       return h('div', { class: 'team' + (r.turn && r.turn.team === t ? ' team--turn' : '') },
         h('p', { class: 'team__name' }, dot(t), t),
         h('ol', null, h('li', { class: 'cap' }, r.captains[t].name, posTag(r.pos, r.captains[t].ref)),
-          r.picks.filter(function (p) { return p.team === t; }).map(function (p) { return h('li', null, p.name, posTag(r.pos, p.ref)); })));
+          posSort(r.picks.filter(function (p) { return p.team === t; }), r.pos).map(function (p) { return h('li', null, p.name, posTag(r.pos, p.ref)); })));
     }));
     panel.appendChild(board);
     if (r.status !== '완료') {
       panel.appendChild(h('h2', { text: '남은 사람 ' + r.pool.length + '명' }));
-      panel.appendChild(h('ul', { class: 'pool' }, r.pool.map(function (p) {
+      panel.appendChild(h('ul', { class: 'pool' }, posSort(r.pool, r.pos).map(function (p) {
         var label = p.name + (p.guest ? ' (게스트)' : '');
         return h('li', null, r.canPick
           ? h('button', { type: 'button', onclick: function () {

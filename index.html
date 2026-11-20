@@ -80,6 +80,7 @@
   .rank i { font: 700 18px/1 var(--num); font-style: normal; color: var(--sun); }
   .rank li.is-top b, .rank li.is-top i { color: var(--sun); }
   .rank--page { margin: 0 0 18px; }
+  small.pos { display: inline-block; margin-left: 4px; padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; font: 600 11px/15px var(--num); color: var(--ink-2); vertical-align: 1px; }
   .rules { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
   .rules summary { cursor: pointer; font-size: 14px; font-weight: 700; }
   .rules--warn { border-color: var(--sun); }
@@ -2274,6 +2275,9 @@
     return box;
   }
 
+  /** 이름 옆 작은 포지션 표시(회원 정보의 1~5) */
+  function posTag(map, ref) { var t = map && ref ? map[ref] : ''; return t ? h('small', { class: 'pos', text: t, 'aria-label': '포지션 ' + t }) : null; }
+
   /* ---------- 팀 구성(누구나 나눠서 저장) ---------- */
   var TEAM_COLORS = ['검정', '흰색', '주황'];
   function openTeams(ev) {
@@ -2328,7 +2332,7 @@
         h('span', { text: done ? r.saved.doneBy + ' 님이 ' + r.saved.doneAt.slice(5, 16) + '에 확정 · ' + r.saved.by + ' 님이 저장' : r.saved.by + ' 님이 ' + r.saved.at.slice(5, 16) + '에 저장' })));
       panel.appendChild(h('div', { class: 'teams' + (T.mode === 2 ? ' teams--2' : '') }, colors.map(function (c) {
         return h('div', { class: 'team' }, h('p', { class: 'team__name' }, dot(c), c + ' ' + T.teams[c].length + '명'),
-          h('ol', null, T.teams[c].map(function (x) { return h('li', null, x.name, x.ref && T.noshowRefs && T.noshowRefs[x.ref] ? h('span', { class: 'ns', text: ' 노쇼' }) : null); })));
+          h('ol', null, T.teams[c].map(function (x) { return h('li', null, x.name, posTag(r.pos, x.ref), x.ref && T.noshowRefs && T.noshowRefs[x.ref] ? h('span', { class: 'ns', text: ' 노쇼' }) : null); })));
       })));
       var left = r.players.filter(function (p) { return p.base && !assigned[p.ref]; });
       if (left.length) panel.appendChild(h('p', { class: 'fine', text: '팀에 안 들어간 참석자: ' + left.map(function (p) { return p.name; }).join(', ') }));
@@ -2385,7 +2389,7 @@
         if (p.practice) tags.push('연습');
         if (p.waiting) tags.push(p.came ? '대기(나옴)' : '대기');
         if (p.late && !p.guest) tags.push('급참');
-        return h('label', { class: 'pick' }, cb, h('span', null, p.name, tags.length ? h('span', { class: 'tag', text: ' · ' + tags.join(' · ') }) : null, p.noshow ? h('span', { class: 'tag tag--warn', text: ' · 노쇼' }) : null));
+        return h('label', { class: 'pick' }, cb, h('span', null, p.name, posTag(r.pos, p.ref), tags.length ? h('span', { class: 'tag', text: ' · ' + tags.join(' · ') }) : null, p.noshow ? h('span', { class: 'tag tag--warn', text: ' · 노쇼' }) : null));
       })));
     {                                                    // 자동 구성(누구나): 실력·포지션·키로 서버가 나눠 명단만 돌려준다
       var info = r.profiles || {};
@@ -2426,7 +2430,7 @@
         h('p', { class: 'team__name' }, dot(c), c + ' ' + T.teams[c].length + '명'),
         r.staff && T.teams[c].length && teamStatText(T.teams[c].filter(function (x) { return x.ref; }).map(function (x) { return x.ref; }), r.profiles || {}) ? h('p', { class: 'team__stat', text: teamStatText(T.teams[c].filter(function (x) { return x.ref; }).map(function (x) { return x.ref; }), r.profiles || {}) }) : null,
         h('ol', null, T.teams[c].map(function (x, i) {
-          return h('li', null, h('button', { type: 'button', text: x.name, 'aria-label': x.name + ' 빼기', onclick: function () { T.teams[c].splice(i, 1); render(); } }));
+          return h('li', null, h('button', { type: 'button', 'aria-label': x.name + ' 빼기', onclick: function () { T.teams[c].splice(i, 1); render(); } }, x.name, posTag(r.pos, x.ref)));
         })));
     })));
     var free = r.players.filter(function (p) { return T.sel[p.ref] && !assigned[p.ref]; });
@@ -2435,7 +2439,7 @@
     panel.appendChild(h('ul', { class: 'pool' }, free.map(function (p) {
       return h('li', { class: 'pool__item' },
         h('button', { type: 'button', 'aria-label': p.name + '을(를) ' + T.active + ' 팀에', onclick: function () { T.teams[T.active].push({ ref: p.ref, name: p.name }); render(); } },
-          p.name + (p.guest ? ' (게스트)' : ''), p.noshow ? h('span', { class: 'ns', text: '노쇼' }) : null),
+          p.name + (p.guest ? ' (게스트)' : ''), posTag(r.pos, p.ref), p.noshow ? h('span', { class: 'ns', text: '노쇼' }) : null),
         h('button', { class: 'pool__x', type: 'button', 'aria-label': p.name + ' 팀구성에서 제외', text: '✕', onclick: function () { T.sel[p.ref] = false; render(); } }));
     })));
     var excluded = r.players.filter(function (p) { return !T.sel[p.ref]; });
@@ -2444,7 +2448,7 @@
       panel.appendChild(h('ul', { class: 'pool pool--out' }, excluded.map(function (p) {
         var why = p.noshow ? '노쇼' : p.practice ? '연습' : p.waiting && !p.came ? '대기' : '';
         return h('li', null, h('button', { type: 'button', 'aria-label': p.name + ' 다시 넣기', onclick: function () { T.sel[p.ref] = true; render(); } },
-          p.name + (p.guest ? ' (게스트)' : ''), why ? h('span', { class: 'ns', text: why }) : null));
+          p.name + (p.guest ? ' (게스트)' : ''), posTag(r.pos, p.ref), why ? h('span', { class: 'ns', text: why }) : null));
       })));
     }
     var input = h('input', { type: 'text', maxlength: '20', placeholder: '명단에 없는 이름', 'aria-label': '직접 이름 넣기' });
@@ -2655,8 +2659,8 @@
     var board = h('div', { class: 'teams' }, teams.map(function (t) {
       return h('div', { class: 'team' + (r.turn && r.turn.team === t ? ' team--turn' : '') },
         h('p', { class: 'team__name' }, dot(t), t),
-        h('ol', null, h('li', { class: 'cap', text: r.captains[t].name }),
-          r.picks.filter(function (p) { return p.team === t; }).map(function (p) { return h('li', { text: p.name }); })));
+        h('ol', null, h('li', { class: 'cap' }, r.captains[t].name, posTag(r.pos, r.captains[t].ref)),
+          r.picks.filter(function (p) { return p.team === t; }).map(function (p) { return h('li', null, p.name, posTag(r.pos, p.ref)); })));
     }));
     panel.appendChild(board);
     if (r.status !== '완료') {
@@ -2664,10 +2668,10 @@
       panel.appendChild(h('ul', { class: 'pool' }, r.pool.map(function (p) {
         var label = p.name + (p.guest ? ' (게스트)' : '');
         return h('li', null, r.canPick
-          ? h('button', { type: 'button', text: label, onclick: function () {
+          ? h('button', { type: 'button', onclick: function () {
               ask({ title: r.turn.team + ' 팀이 ' + p.name + ' 님을 뽑을까요?', ok: '뽑기' }).then(function (yes) { if (yes) draftCall('draftPick', { eventId: r.eventId, ref: p.ref }, p.name + ' 님을 ' + r.turn.team + ' 팀으로'); });
-            } })
-          : h('span', { text: label }));
+            } }, label, posTag(r.pos, p.ref))
+          : h('span', null, label, posTag(r.pos, p.ref)));
       })));
       panel.appendChild(h('p', { class: 'fine', style: 'margin:10px 0 0', text: '이 화면은 4초마다 자동으로 새로 받아 와요.' }));
     }

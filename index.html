@@ -1672,7 +1672,7 @@
   }
 
   function adminView(d) {
-    var f = S.form || (S.form = { date: d.tomorrow, time: '', title: '', place: '', capacity: '', memo: '', repeat: '1' });
+    var f = S.form || (S.form = { date: d.tomorrow, time: '', title: '정기모임(5:30~7:30)', place: '', capacity: '24', memo: '', repeat: '1' });   // 기본 제목·정원은 미리 넣어 두고 고칠 수 있게. 시간은 쓰지 않음
     function bind(name, attrs, tag) {
       var el = h(tag || 'input', attrs); el.value = f[name];
       el.addEventListener('input', function () { f[name] = el.value; });
@@ -1691,13 +1691,11 @@
 
     var create = h('section', { class: 'panel' }, h('h2', { text: '모임 만들기' }),
       h('p', { text: '같은 모임을 여러 날 이어서 열려면 아래 "며칠 연속"을 늘려 주세요.' }),
-      h('div', { class: 'row2' },
-        h('label', { class: 'field' }, h('span', { text: '날짜' }), bind('date', { type: 'date', min: d.today })),
-        h('label', { class: 'field' }, h('span', { text: '시간' }), bind('time', { type: 'time' }))),
-      h('label', { class: 'field' }, h('span', { text: '제목' }), bind('title', { type: 'text', maxlength: '60', placeholder: '예: 저녁 정기 모임' })),
+      h('label', { class: 'field' }, h('span', { text: '날짜' }), bind('date', { type: 'date', min: d.today })),
+      h('label', { class: 'field' }, h('span', { text: '제목' }), bind('title', { type: 'text', maxlength: '60', placeholder: '정기모임(5:30~7:30)' })),
       h('label', { class: 'field' }, h('span', null, '장소 ', h('small', { text: '(선택)' })), bind('place', { type: 'text', maxlength: '60' })),
       h('div', { class: 'row2' },
-        h('label', { class: 'field' }, h('span', null, '정원 ', h('small', { text: '(비우면 제한 없음)' })), bind('capacity', { type: 'number', min: '0', max: '9999', inputmode: 'numeric' })),
+        h('label', { class: 'field' }, h('span', null, '정원 ', h('small', { text: '(기본 24, 비우면 제한 없음)' })), bind('capacity', { type: 'number', min: '0', max: '9999', inputmode: 'numeric' })),
         h('label', { class: 'field' }, h('span', { text: '며칠 연속' }), bind('repeat', { type: 'number', min: '1', max: '31', inputmode: 'numeric' }))),
       h('label', { class: 'field' }, h('span', null, '메모 ', h('small', { text: '(선택)' })), bind('memo', { type: 'text', maxlength: '200' })),
       h('button', { class: 'btn', type: 'button', text: '모임 만들기', onclick: function () {

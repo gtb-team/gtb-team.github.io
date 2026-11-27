@@ -80,6 +80,7 @@
   .rank i { font: 700 18px/1 var(--num); font-style: normal; color: var(--sun); }
   .rank li.is-top b, .rank li.is-top i { color: var(--sun); }
   .rank--page { margin: 0 0 18px; }
+  .pday { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: var(--go-bg); color: var(--go); font-size: 11px; font-weight: 700; vertical-align: 2px; }
   small.pos { display: inline-block; margin-left: 4px; padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; font: 600 11px/15px var(--num); color: var(--ink-2); vertical-align: 1px; }
   .rules { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
   .rules summary { cursor: pointer; font-size: 14px; font-weight: 700; }
@@ -1303,6 +1304,7 @@
       ev.started ? h('button', { class: 'linkbtn', type: 'button', text: '운영진: 노쇼 체크', onclick: function () { noShowCheck(ev); } }) : null,
       ev.started ? h('button', { class: 'linkbtn', type: 'button', text: ev.locked ? '운영진: 출결 확정 해제' : '운영진: 출결 확정', onclick: function () { confirmAttend(ev); } }) : null,
       h('button', { class: 'linkbtn', type: 'button', text: '운영진: 추가 등록', onclick: function () { staffAdd(ev); } }),
+      h('button', { class: 'linkbtn', type: 'button', text: ev.practiceDay ? '운영진: 연습데이 해제' : '운영진: 연습데이 지정', onclick: function () { togglePracticeDay(ev); } }),
       d.contactsOpen ? h('button', { class: 'linkbtn', type: 'button', 'aria-label': '참석 신청 회원 연락처', onclick: function () { showContacts(ev); } }, phoneIcon(), '연락처 전체') : null);
   }
 
@@ -1349,7 +1351,7 @@
     else if (ev.full) status = h('span', { class: 'status', text: '대기 접수' });
 
     var el = h('article', { class: 'ev' },
-      h('div', { class: 'ev__head' }, h('h2', null, ev.time ? h('span', { class: 'ev__time', text: ev.time }) : null, ev.title), mine),
+      h('div', { class: 'ev__head' }, h('h2', null, ev.time ? h('span', { class: 'ev__time', text: ev.time }) : null, ev.title, ev.practiceDay ? h('span', { class: 'pday', text: '연습데이' }) : null), mine),
       ev.place ? h('p', { class: 'ev__sub', text: ev.place }) : null,
       ev.memo ? h('p', { class: 'ev__sub', text: ev.memo }) : null,
       h('p', { class: 'ev__count' },
@@ -1603,6 +1605,14 @@
       .then(function (yes) { if (yes) staffCall('staffAdd', { eventId: ev.id, memberId: who.value, kind: kind.value, late: sameDayOrPast && late.checked }, '운영진 권한으로 등록했어요'); });
   }
 
+  /** 연습데이: 지정하면 그날 참석비·급참비를 받지 않는다(노쇼비·게스트비는 그대로) */
+  function togglePracticeDay(ev) {
+    var on = !ev.practiceDay;
+    ask({ title: on ? '연습데이로 지정할까요?' : '연습데이를 해제할까요?', ok: on ? '연습데이 지정' : '해제',
+      text: dayLabel(ev.date) + '  ' + ev.title + '\n' + (on ? '이날은 참석비와 급참비를 받지 않아요(노쇼비·게스트비는 그대로). 월 정산을 다시 만들면 반영돼요.' : '해제하면 이날도 평소처럼 참석비가 계산돼요.') })
+      .then(function (yes) { if (yes) staffCall('practiceDay', { eventId: ev.id, on: on }, on ? '연습데이로 지정했어요' : '연습데이를 해제했어요'); });
+  }
+
   function confirmAttend(ev) {
     if (ev.locked) {
       ask({ title: '출결 확정을 해제할까요?', text: dayLabel(ev.date) + '  ' + ev.title + '\n해제하면 회원들도 다시 노쇼 체크를 고칠 수 있어요(당일에 한해).', ok: '확정 해제' })
@@ -1740,7 +1750,7 @@
     S.recent.events.forEach(function (ev) {
       var p = ymd(ev.date);
       box.appendChild(h('div', { class: 'rec' },
-        h('h3', null, p.m + '/' + p.d + '(' + DOW[p.dow] + ') ' + ev.title, h('small', { text: ev.date === S.recent.today ? '오늘' : '' })),
+        h('h3', null, p.m + '/' + p.d + '(' + DOW[p.dow] + ') ' + ev.title, ev.practiceDay ? h('span', { class: 'pday', text: '연습데이' }) : null, h('small', { text: ev.date === S.recent.today ? '오늘' : '' })),
         group('참석 확정', ev.confirmed, 'confirmed', ev, d), group('대기', ev.waiting, 'waiting', ev, d), group('연습', ev.practice, 'practice', ev, d),
         staffTools(ev)));
     });
@@ -2090,10 +2100,42 @@
       h('div', { class: 'pair' },
         h('button', { class: 'btn btn--ghost', type: 'button', text: prev + ' 정산', onclick: function () { run(prev); } }),
         h('button', { class: 'btn btn--ghost', type: 'button', text: thisMonth + ' 정산', onclick: function () { run(thisMonth); } })),
+      pdayBox(prev, thisMonth),
       h('p', { class: 'fine', style: 'margin:14px 0 6px', text: '단톡방 공지용: 이미 만든 "정산 (월)" 시트를 그대로 읽어(손으로 고친 금액 포함) 대화명·지정요일·참석·합계만 담은 모바일용 정산표 이미지를 만들어요. 정산을 다시 누르면 손으로 고친 내용은 지워지니 주의하세요.' }),
       h('div', { class: 'pair' },
         h('button', { class: 'btn', type: 'button', text: Number(prev.slice(5)) + '월 정산 공지 만들기', onclick: function () { openBillNotice(prev); } }),
         h('button', { class: 'btn btn--ghost', type: 'button', text: Number(thisMonth.slice(5)) + '월 정산 공지 만들기', onclick: function () { openBillNotice(thisMonth); } })));
+  }
+
+  /** 월 정산 전에: 그 달 모임 중 연습데이 지정(지난 모임도 가능) */
+  function pdayBox(prev, thisMonth) {
+    var box = h('details', { class: 'adjust', style: 'margin-top:12px' });
+    if (S.pdayOpen) box.open = true;
+    box.addEventListener('toggle', function () { S.pdayOpen = box.open; if (box.open && !S.pdays) load(prev); });
+    function load(month, on, ev) {
+      if (document.body.classList.contains('is-busy')) return;
+      setBusy(true);
+      call(ev ? 'practiceDay' : 'practiceDays', ev ? { eventId: ev.id, on: on, month: month } : { month: month }).then(function (r) {
+        setBusy(false); S.pdays = r; S.pdayOpen = true; render();
+        if (ev) toast(on ? Number(ev.date.slice(5, 7)) + '/' + Number(ev.date.slice(8)) + ' 연습데이로 지정했어요' : '연습데이를 해제했어요');
+      }, function (err) { setBusy(false); if (!handleAuth(err)) toast(err.message || '불러오지 못했어요.'); });
+    }
+    var cnt = S.pdays ? S.pdays.events.filter(function (e) { return e.practiceDay; }).length : 0;
+    box.appendChild(h('summary', { text: '연습데이 지정' + (S.pdays ? ' · ' + Number(S.pdays.month.slice(5)) + '월 ' + cnt + '회' : '') + ' (눌러서 열기)' }));
+    box.appendChild(h('p', { class: 'fine', style: 'margin:6px 0', text: '연습데이로 고른 날은 참석비·급참비를 받지 않아요(노쇼비·게스트비는 그대로). 고른 뒤 위 [정산]을 다시 눌러야 정산 시트에 반영돼요.' }));
+    box.appendChild(h('div', { class: 'seg', role: 'group', 'aria-label': '달' }, [prev, thisMonth].map(function (m) {
+      return h('button', { type: 'button', 'aria-pressed': String(!!S.pdays && S.pdays.month === m), text: Number(m.slice(5)) + '월', onclick: function () { load(m); } });
+    })));
+    if (S.pdays) {
+      if (!S.pdays.events.length) box.appendChild(h('p', { class: 'fine', text: '이 달 모임이 없어요.' }));
+      S.pdays.events.forEach(function (e) {
+        var p = ymd(e.date);
+        var cb = h('input', { type: 'checkbox', checked: !!e.practiceDay, 'aria-label': p.m + '/' + p.d + ' 연습데이' });
+        cb.addEventListener('change', function () { load(S.pdays.month, cb.checked, e); });
+        box.appendChild(h('label', { class: 'pick' }, cb, h('span', null, p.m + '/' + p.d + '(' + DOW[p.dow] + ') ' + e.title, e.practiceDay ? h('span', { class: 'tag', text: ' · 연습데이' }) : null)));
+      });
+    }
+    return box;
   }
 
   /* ---------- 정산 공지(단톡방용 이미지) ---------- */
@@ -2113,6 +2155,7 @@
       { k: 'name', t: '대화명', w: 2.3, left: true },
       { k: 'days', t: '지정요일', w: 2.1, left: true },
       { k: 'free', t: '지정일', w: 1.2 },
+      { k: 'pday', t: '연습', w: 1 },
       { k: 'wd', t: '평일', w: 1 }, { k: 'we', t: '주말', w: 1 }, { k: 'late', t: '급참', w: 1 },
       { k: 'noshow', t: '노쇼', w: 1 }, { k: 'guest', t: '게스트', w: 1.4 },
       { k: 'etc', t: '기타', w: 1.6, money: true },
